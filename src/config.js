@@ -402,6 +402,54 @@ export const NEWS = {
 };
 
 // ---------------------------------------------------------------------------
+// Go viral: Daily Universe, share card, Milky Way challenge, Feed Your Hometown
+// ---------------------------------------------------------------------------
+
+// Daily Universe: the same seed for everyone on the same UTC day (no server needed).
+// One modifier per day, picked from the seed. Each modifier's fields are read where noted.
+export const DAILY = {
+  epoch: '2026-11-01', // Daily Universe #1
+  modifiers: [
+    { id: 'thickFog', name: 'Thick fog', desc: 'Cosmic Dawn is 40% fuller of gas', dawnCount: 1.4 },
+    { id: 'crowded', name: 'Crowded galaxy', desc: 'Twice as many rival black holes', rivalWeight: 2 },
+    { id: 'chatty', name: 'Chatty galaxy', desc: 'Civilisations call twice as often', civInterval: 0.5 },
+    { id: 'quasarSeason', name: 'Quasar season', desc: 'Igniting as a quasar is 30% easier', quasarIgnite: 0.7 },
+    { id: 'gifted', name: 'Gifted start', desc: 'Start with a random cosmic power', startPower: true },
+    { id: 'heavySeed', name: 'Heavy seed', desc: 'Start 30% heavier', startMass: 1.3 },
+    { id: 'restless', name: 'Restless cosmos', desc: 'Cosmic events come twice as often', eventInterval: 0.5 },
+    { id: 'longNight', name: 'Long night', desc: 'The Far Future lasts 50% longer', farFuture: 1.5 },
+  ],
+};
+
+// End-of-run share card (src/systems/share.js).
+export const SHARE = {
+  url: '', // link in the share text; '' = the page the game is on
+  eraEmoji: ['🌑', '⭐', '🌌', '💥', '🕯️'], // one per era reached
+  deathEmoji: '💀',
+  emptyEmoji: '⬛',
+  challengeSeconds: 600, // "under 10 minutes"
+};
+
+// "Eat the Milky Way in under 10 minutes": clear Cosmic Dawn → Quasar Era against the clock.
+export const CHALLENGE = {
+  seconds: 600,
+  boardSize: 10, // local best times kept (a global leaderboard needs a server: see SPEC "Later")
+};
+
+// Feed Your Hometown (Sandbox): pick a city or country, watch your black hole swallow it.
+export const HOMETOWN = {
+  maxResults: 8,
+  minChars: 2,
+  earthRadius: 520, // world px
+  globeTexture: 768, // px
+  approachTime: 3.2, // seconds for the black hole to reach the city
+  zoomIn: 1.9, // camera zoom on the city
+  biteTime: 2.2, // seconds of swallowing
+  biteRadius: 0.16, // hole left in the globe, × Earth's radius
+  nearestBlackHoleLy: 1560, // Gaia BH1, the nearest known black hole (light-years)
+};
+
+// ---------------------------------------------------------------------------
 // Objects
 // ---------------------------------------------------------------------------
 // mass: game mass (SPEC.md). radius: world px, chosen so each object becomes edible at a

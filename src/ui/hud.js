@@ -5,7 +5,7 @@
 import { mount, on } from './dom.js';
 import { ICONS } from './icons.js';
 import { kgHtml, formatTime, formatTimePrecise, ageHtml } from '../systems/format.js';
-import { LEVEL, OBJECTS, TIERS, RUN, POWERS } from '../config.js';
+import { LEVEL, OBJECTS, TIERS, RUN, POWERS, CHALLENGE } from '../config.js';
 import { POWERS_BY_ID, SYNERGIES } from '../data/powers.js';
 import { recordingSupported } from '../systems/recorder.js';
 
@@ -59,7 +59,7 @@ export default class Hud {
             </div>
             <div class="hud-right">
               ${mode === 'level' ? '<div class="panel hud-time"><div class="label">Time left</div><div class="value"></div></div>' : ''}
-              ${mode === 'run' ? '<div class="panel hud-time hud-age"><div class="label">Cosmic age</div><div class="value"></div></div>' : ''}
+              ${mode === 'run' ? `<div class="panel hud-time hud-age"><div class="label">${o.challenge ? 'Milky Way' : 'Cosmic age'}</div><div class="value"></div></div>` : ''}
               ${canRecord ? `<button class="hud-btn chamfer rec" data-act="record" aria-label="Record clip">${ICONS.record}</button>` : ''}
             </div>
           </div>
@@ -155,7 +155,7 @@ export default class Hud {
   }
 
   /** Run mode per frame: cosmic age, evaporation warning, quasar meter, jets charge. */
-  updateRun({ age, evaporating, quasar, jets }) {
+  updateRun({ age, evaporating, quasar, jets, clock }) {
     if (this.jetsBtn) {
       this.set('jetsOn', !!jets, (v) => (this.jetsBtn.style.display = v ? '' : 'none'));
       if (jets) {
@@ -166,7 +166,11 @@ export default class Hud {
         this.set('jetsAuto', jets.auto, (v) => this.jetsBtn.classList.toggle('auto', v));
       }
     }
-    this.set('age', ageHtml(age), (v) => (this.ageEl.innerHTML = v));
+    if (clock !== undefined) {
+      // Milky Way challenge: a stopwatch against the 10-minute target.
+      this.set('age', formatTime(clock), (v) => (this.ageEl.textContent = v));
+      this.set('late', clock > CHALLENGE.seconds, (v) => this.ageEl.parentElement.classList.toggle('warn', v));
+    } else this.set('age', ageHtml(age), (v) => (this.ageEl.innerHTML = v));
     this.set('evap', evaporating, (v) => (this.eraWarn.style.display = v ? '' : 'none'));
     if (quasar !== undefined) this.set('quasar', Math.round(quasar * 100), (v) => (this.eraQuasar.querySelector('b').style.width = `${v}%`));
   }

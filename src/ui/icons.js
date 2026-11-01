@@ -17,6 +17,10 @@ export const ICONS = {
   headStart: svg('<circle cx="12" cy="12" r="8"/><path d="M12 7v10M8 11l4-4 4 4"/>'),
   timeDilation: svg('<circle cx="12" cy="13" r="7"/><path d="M12 9v4l3 2M9 3h6M18 6l1.5-1.5"/>'),
   hawkingShield: svg('<path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><circle cx="12" cy="12" r="2.5"/>'),
+  share: svg('<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/>'),
+  calendar: svg('<rect x="4" y="5" width="16" height="15" rx="1"/><path d="M4 10h16M9 3v4M15 3v4"/>'),
+  timer: svg('<circle cx="12" cy="13" r="7"/><path d="M12 9v4h3M10 3h4"/>'),
+  globe: svg('<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.5 3.5 5.5 3.5 8.5s-1 6-3.5 8.5M12 3.5C9.5 6 8.5 9 8.5 12s1 6 3.5 8.5"/>'),
   // Cosmic powers and synergies
   kerrSpin: svg('<path d="M12 12c0-1.2 1.6-1.8 2.4-.8 1 1.3-.2 3.6-2.6 3.6-2.8 0-4.4-3-3-5.6 1.6-3 6.4-3.4 8.6-.4 2.4 3.4.4 8.6-4.6 9.2"/>'),
   jets: svg('<circle cx="12" cy="12" r="3"/><path d="M12 9V2M12 15v7M9.5 4.5L12 2l2.5 2.5M9.5 19.5L12 22l2.5-2.5"/>'),

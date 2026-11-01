@@ -1,6 +1,6 @@
 # Black Hole: Event Horizon — Game Spec
 
-Nov 1, 2026 · Sijan Paudel · **Updated after Session C to match the game as built**
+Nov 1, 2026 · Sijan Paudel · **Updated after Session D to match the game as built**
 
 ## Overview
 
@@ -21,6 +21,8 @@ Nov 1, 2026 · Sijan Paudel · **Updated after Session C to match the game as bu
 | Mode | What it is |
 | --- | --- |
 | **Run** (main, the PLAY button) | "One Life of a Black Hole": one continuous run through five eras, Cosmic Dawn → Far Future. No timer. Pick 1 of 3 cosmic powers at each era change. |
+| **Daily Universe** | A run with the same seed for everyone on the same UTC day, a daily modifier and a share card ("Universe #N"). |
+| **Milky Way challenge** | A run against the clock: clear Cosmic Dawn → Quasar Era in under 10 minutes. |
 | **Classic** | The original 15 fixed levels in 5 tiers, each with a 3-minute timer and a target mass, ending with the Sagittarius A* boss. |
 | **Sandbox** | No timer, no danger, spawn any unlocked object, eat big things from the inside. Includes the "What if…?" scenarios. |
 
@@ -125,6 +127,37 @@ Nov 1, 2026 · Sijan Paudel · **Updated after Session C to match the game as bu
 - **Galactic News**: a ticker under the top HUD (in the canvas, so it's in clips; it moves below the mass panel while recording). Pre-written funny headlines (`src/data/news.js`) report what you do: eating or sparing civilisations, big swallows, eating rivals, quasar ignition, synergies, new powers, milestones, era changes. When nothing has happened for 28–40 s an era-flavoured filler runs ("Galactic News will begin as soon as someone invents news"). Each shows 6.5 s; long ones scroll.
 - **Hook for later**: `Civs.messageFor()` is the one place a message is chosen, so a live AI message (from a small server, never with a key in the game) can replace it, with this bank as the offline fallback. Choice percentages ("only 14% spared them") need a server too and stay in "Later"; the decision screen is built so a percentage line can be added under the buttons.
 
+## Built to go viral (Session D)
+
+### Daily Universe
+
+**Every UTC day, everyone gets the same universe.** The seed comes from the date (`src/systems/daily.js`), so no server is needed. Universe #1 is 1 Nov 2026 (`DAILY.epoch`).
+
+- The seed drives separate random streams for the power offers, civilisations (species, messages, boons), Galactic News, which object types spawn, and (Session E) cosmic events. Your moves still differ, but the choices you're offered and the worlds you meet come in the same order for everyone, so results are comparable.
+- **One modifier per day** (`DAILY.modifiers`): Thick fog (Cosmic Dawn 40% fuller), Crowded galaxy (2× rivals), Chatty galaxy (civilisations call twice as often), Quasar season (ignition 30% easier), Gifted start (a random power at the start), Heavy seed (start 30% heavier), Restless cosmos (events twice as often), Long night (Far Future 50% longer).
+- The title screen has a **Daily Universe #N** button showing today's modifier, or your best era once you've played. Replays are allowed; the save keeps today's attempts and best result (furthest era, then biggest mass) and resets the next UTC day.
+
+### Share card
+
+**Every run end screen has "Share your universe", plus [ Copy text ] and [ Save image ].**
+
+- **Text** (WhatsApp, X), Wordle-style: game name and Universe #N (or "Milky Way Challenge"), today's modifier, an emoji strip with one emoji per era (🌑 ⭐ 🌌 💥 🕯️ reached, 💀 where you died, ⬛ not reached), a line like "Ate 3 civilisations, spared 1, became a quasar, lived 13.8 billion years", the Milky Way time if you got there, your powers, and the game's link (`SHARE.url`, or the page it's on).
+- **Image** (Instagram, TikTok): a 1080×1920 PNG drawn in code: title, Universe #, result, a black hole, the five-era strip with your death marked, lived until / peak mass / civilisations / quasar / Milky Way time / powers, and "PLAY FREE".
+- **Share** opens the phone's share menu with the image and text (Web Share API with files); if files can't be shared it shares the text; if there's no share menu it copies the text. Save image downloads the PNG.
+
+### Milky Way challenge: "Eat the Milky Way in under 10 minutes"
+
+- Started from the title (**Milky Way challenge** button, showing your best time). A normal run, but the HUD's cosmic-age panel becomes a **Milky Way stopwatch** (turns red past 10:00), and the run ends the moment you clear the Quasar Era: "MILKY WAY EATEN · 07:42".
+- The clock is game time (it stops while you pick a power or pause; slow-motion moments slow it for everyone).
+- The end screen shows your time, whether it's under 10 minutes, and your 3 best times on this device (top 10 kept, `CHALLENGE.boardSize`). In normal runs, clearing the Quasar Era also flashes "MILKY WAY EATEN · mm:ss" and the time goes on the share card.
+- **Hook for later**: `submitTime()` in `src/systems/leaderboard.js` is the one place a time is recorded, ready for a global leaderboard behind a small server.
+
+### Feed Your Hometown
+
+- Sandbox → **Feed your hometown** (top of the What if…? list). Type a city or country; matches come from a bundled list of **7,270 cities and 177 countries** from Natural Earth (public domain, credited in `CREDITS.md`), biggest cities first. Cities and countries only, never addresses; what you type is only matched against the list on the device.
+- The data (about 100 KB gzipped for places, 19 KB for land outlines) loads only when this screen opens, so it doesn't slow the game's start.
+- **The scene**: Earth drawn from Natural Earth's land outlines, turned so your place faces the camera, with an amber marker and its name. A small black hole flies in, the camera zooms onto the place, the black hole sits on it and eats a hole into the globe (debris spiralling in, shake, bass drop), banner "KATHMANDU · SWALLOWED", then the camera pulls back to show Earth with a hole in it and the caption **"Comment your city · I'll feed it next"** (in the canvas, so it's in the clip). It ends on the real fact: "The nearest known black hole, Gaia BH1, is about 1,560 light-years from Kathmandu. Kathmandu is safe." Auto-record works like the other scenarios.
+
 ## Classic mode (the original 15 levels)
 
 **Eat → grow → reach the target mass before the 3-minute timer runs out → spend Stardust → next level.** Each level starts at its tier's starting mass (plus Head Start). Time running out fails the level; on fail you keep half the Stardust and can Revive +30 s once (ad).
@@ -215,20 +248,21 @@ All values live in `config.js` (`OBJECTS`, `RIVAL`, `BOSS`).
 
 | Screen | Contents |
 | --- | --- |
-| Title | Logo, black hole art, **PLAY** (starts a run), best run, [Classic] [Sandbox] [Upgrades] [Settings] |
+| Title | Logo, black hole art, **PLAY** (starts a run), Daily Universe #N and Milky Way challenge buttons, best run, [Classic] [Sandbox] [Upgrades] [Settings] |
 | HUD (run) | Mass + "Next era" bar, cosmic age, Galactic News ticker, era panel (meter, next era, Evaporating warning, Quasar meter), power icons, JETS button (with cooldown), record, pause; civilisation message card with EAT / SPARE and a countdown; scanner arrows |
 | Power pick | Era kicker, "Choose a power", 3 cards (icon, name, NEW / Level N, effect, level pips, synergy hint), your powers |
 | HUD (Classic) | Mass + target bar, time left, tier panel, record, pause |
-| Run end | Run complete / Run over, era reached, cosmic age, peak mass, objects, time, powers, Stardust, New run / Revive / ×2 / Upgrades / Menu |
+| Run end | Run complete / Run over / Daily Universe #N / Milky Way challenge, (daily: modifier, attempt; challenge: time and best times), Share your universe + [Copy text] [Save image], era reached, cosmic age, peak mass, objects, time, civilisations, Milky Way time, powers, Stardust, New run / Revive / ×2 / Upgrades / Menu |
+| Feed your hometown | Search box, up to 8 matching cities/countries, note that only cities and countries are listed |
 | Classic level select | Star chart: tiers bottom to top, locked levels greyed, selected level bar, "Enter event horizon" |
 | Level complete / failed | Stats, Stardust, next-upgrade progress, Next / Retry, ad buttons |
 | Upgrade shop | Six upgrade cards with level, effect, cost; free upgrade via ad; launch run or level |
 | Science card / log | Title, short real fact, diagram, tags, close; the log lists all five cards |
 | Settings | Music, sound effects, Low graphics, auto-record scenarios, language (English), reset progress |
-| Sandbox menu | Free play (choose starting tier), "What if…?" scenarios, auto-record toggle |
+| Sandbox menu | Free play (choose starting tier), Feed your hometown, "What if…?" scenarios, auto-record toggle |
 
 - **Sandbox** unlocks after clearing Classic level 3 **or** reaching First Stars in a run.
-- **Save data** (localStorage, wrapped in try/catch): Classic levels cleared, Stardust, upgrade levels, science cards, settings, last-played time (idle earnings), daily-bonus dates, runs played/completed, best era, best run mass. Saved after every level/run and when the tab is hidden.
+- **Save data** (localStorage, wrapped in try/catch): Classic levels cleared, Stardust, upgrade levels, science cards, settings, last-played time (idle earnings), daily-bonus dates, runs played/completed, best era, best run mass, today's Daily Universe (attempts, best), Milky Way challenge best times. Saved after every level/run and when the tab is hidden.
 - **Ad hooks**: `showRewardedAd(onReward)` in `src/systems/ads.js` shows a placeholder and rewards after 1 s. Swap a real SDK in later behind that one function. Ads are always optional.
 - **Testing shortcuts**: `?unlockall` (every level, sandbox and card, not saved) and `?reset` (wipe the save). In `npm run dev` only (or a `vite build --mode bot` test build): `?bot` lets a simple autopilot play (`src/systems/autopilot.js`, used to measure era lengths), `?era=3` starts a run at era 3, `?powers=jets,kerrSpin` grants powers.
 
@@ -260,9 +294,9 @@ black-hole-game/
     ├── flow.js             moving between screens and scenes
     ├── scenes/             TitleScene (menus), GameScene (run/classic/sandbox/scenario), ShopScene, UIScene (in-canvas overlay)
     ├── objects/            BlackHole, SpaceObject
-    ├── systems/            run (eras), powers, civs, news, spawner, effects, textures, audio, recorder, scenarios, save, economy, ads, format, starfield, autopilot (dev bot)
-    ├── data/               levels, scienceCards, scenarios, rivals, powers, civilisations, news
-    └── ui/                 HTML menus and HUD: dom, menus, hud, overlays, powerPick, shop, scienceCard, icons, styles.css
+    ├── systems/            run (eras), powers, civs, news, daily, rng, share, leaderboard, globe, spawner, effects, textures, audio, recorder, scenarios, save, economy, ads, format, starfield, autopilot (dev bot)
+    ├── data/               levels, scienceCards, scenarios, rivals, powers, civilisations, news, places + land (Natural Earth)
+    └── ui/                 HTML menus and HUD: dom, menus, hud, overlays, powerPick, hometown, shop, scienceCard, icons, styles.css
 ```
 
 ## Build order
@@ -286,7 +320,7 @@ black-hole-game/
 - [x] **Session A – Runs and eras.** One run through five eras with Hawking evaporation in Cosmic Dawn, era changes using the tier-up moment, quasar ignition, the last-light finale. Fixed levels kept as Classic.
 - [x] **Session B – Cosmic powers.** Pick 1 of 3 at each era change; six powers with 3 levels, three synergies, HUD icons, JETS button. Run length retuned to 6–10 minutes. **→ Playtest gate: do runs feel different from each other?**
 - [x] **Session C – The Universe Talks Back.** Civilisation planets with eat/spare choices, boons and consequences (fear, hostility, fleeing, hope), 365 hand-written lines, Galactic News ticker.
-- [ ] **Session D – Go viral.** Daily Universe seed, share card, Feed Your Hometown, "Eat the Milky Way in under 10 minutes".
+- [x] **Session D – Go viral.** Daily Universe (UTC-date seed, daily modifier), share card (text + 9:16 image, share menu with copy/download fallback), Feed Your Hometown (Natural Earth cities and countries), Milky Way challenge with local best times.
 - [ ] **Session E – Cosmic events.** Supernova, tidal disruption, wandering black hole, wormhole, white hole, dark matter, merger chirp.
 - [ ] **Session F – Cosmic Craft (real recipes).**
 
@@ -332,4 +366,17 @@ How to start each session, ready to paste:
 - **Missiles are a nuisance, not a killer** (−2.5% mass, a shove), in keeping with a family-friendly tone and short runs.
 - **Galactic News runs in every era**, with jokes in the early eras about there being no one to report yet, so the ticker teaches players to look at it before civilisations appear.
 - **Headlines are about deeds, never about real people or places** (except your chosen hometown in Feed Your Hometown, Session D).
+
+### Session D – Go viral
+
+- **The daily seed uses the UTC date**, so everyone in the world shares a universe at the same moment (like Wordle's global puzzle), and **Universe #1 is 1 Nov 2026**, the date of the ideas doc.
+- **Separate seeded streams per system** (powers, civilisations, news, spawns, events). With one shared stream, the order of random calls would depend on how fast you play and everyone's universe would drift apart within seconds.
+- **Daily replays are allowed** (it's a free web game and replays are fun), but the run end screen says which attempt it is and the share card is the same format either way. Honest comparison relies on players, as with Wordle.
+- **One modifier per day** makes days feel different and gives the share card a talking point ("Crowded galaxy was brutal today").
+- **"Eat the Milky Way" means clearing the Quasar Era.** The game's mass scale tops out far below a real galaxy (the Milky Way is ~10⁴² kg), so the challenge is framed as eating your way through the galaxy's eras, not as a mass target. The clock is game time so pauses and the power pick don't count against you.
+- **Challenge best times are local** and the leaderboard is a clean hook (`submitTime`), because a global leaderboard needs a server (stays in "Later").
+- **Share uses the Web Share API with an image file when the phone supports it**, falls back to text sharing, then to copying the text; Save image always works. The image is drawn with the 2D canvas API (not a screenshot of the game) so it looks the same on every device and stays small.
+- **Feed Your Hometown uses Natural Earth** (public domain, no attribution required, though it's credited) instead of GeoNames (CC BY): simpler licence, and it includes country label points and land outlines, so the globe shows the real coastline around your city. 7,270 places covers capitals, big cities and many towns; the search also matches countries for smaller places.
+- **The hometown ends on a reassuring real fact** (Gaia BH1 is 1,560 light-years away, so your city is safe), which keeps it family-friendly and educational after a dramatic clip.
+- **The "Comment your city" call to action is drawn in the canvas** at the end of the scene so it's in the saved clip, which is the whole point of the comment-driven loop.
 

@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
 import {
   GAME, COLORS, DEPTH, CAMERA, LEVEL, TIERS, DANGER, EFFECTS, HUD, BOSS, GROWTH, WORLD_EDGE, MILESTONES,
-  LOW_GRAPHICS, RECORDING, ADS, EATING, RUN, POWERS, CIVS,
+  LOW_GRAPHICS, RECORDING, ADS, EATING, RUN, POWERS, CIVS, CHALLENGE,
 } from '../config.js';
-import { POWERS_BY_ID } from '../data/powers.js';
+import { utcDayKey, universeNumber, dailySeed, dailyModifier } from '../systems/daily.js';
+import { stream } from '../systems/rng.js';
+import { POWERS_BY_ID, POWER_LIST } from '../data/powers.js';
 import BlackHole, { radiusForMass } from '../objects/BlackHole.js';
 import Spawner from '../systems/spawner.js';
 import Effects from '../systems/effects.js';
@@ -48,12 +50,16 @@ export default class GameScene extends Phaser.Scene {
     this.levelNum = data?.level ?? 1;
     this.sandboxTier = data?.tier ?? 1;
     this.scenarioId = data?.scenario ?? 'earth';
+    this.scenarioData = { place: data?.place, land: data?.land };
+    this.isDaily = !!data?.daily;
+    this.challenge = !!data?.challenge;
     // Phaser reuses this scene object between games: clear anything a previous game left.
     this.run = null;
     this.powers = null;
     this.civs = null;
     this.news = null;
-    this.rng = Math.random; // seeded for the Daily Universe
+    this.daily = null; // { key, universe, seed } in a Daily Universe run
+    this.mod = {}; // today's Daily Universe modifier (DAILY.modifiers in config.js)
     this.scenario = null;
     this.boss = null;
     this.level = null;
@@ -80,9 +86,14 @@ export default class GameScene extends Phaser.Scene {
     this.speedMultiplier = upgrades.speedMultiplier();
     this.pullRange = upgrades.pullRange();
     if (this.mode === 'run') {
+      if (this.isDaily) {
+        const key = utcDayKey();
+        this.daily = { key, universe: universeNumber(key), seed: dailySeed(key) };
+        this.mod = dailyModifier(key);
+      }
       this.startEraIndex = Phaser.Math.Clamp((+devParams().get('era') || 1) - 1, 0, RUN.eras.length - 1);
       const era = RUN.eras[this.startEraIndex];
-      this.startMass = era.startMass * upgrades.startMassMultiplier();
+      this.startMass = era.startMass * upgrades.startMassMultiplier() * (this.mod.startMass ?? 1);
       this.target = era.goal;
       weights = era.weights;
       this.danger = true;
@@ -100,7 +111,7 @@ export default class GameScene extends Phaser.Scene {
       this.startMass = tier.startMass;
       weights = tier.weights;
     } else {
-      this.scenarioDef = getScenario(this.scenarioId);
+      this.scenarioDef = getScenario(this.scenarioId, this.scenarioData);
       this.startMass = GROWTH.baseMass;
       this.speedMultiplier = 1;
       this.pullRange = EATING.pullRangeMultiplier; // scenarios ignore upgrades
@@ -152,6 +163,7 @@ export default class GameScene extends Phaser.Scene {
 
     this.effects = new Effects(this, this.low);
     this.spawner = new Spawner(this, {
+      rng: this.rngFor('spawn'),
       weights,
       worldRadius: this.worldRadius,
       startMass: this.startMass,
@@ -168,10 +180,14 @@ export default class GameScene extends Phaser.Scene {
     // Scenario scripts may move the black hole and place objects before spawning.
     if (this.mode === 'scenario') this.scenario = createScenario(this.scenarioId, this);
     if (this.mode === 'run') {
-      this.powers = new Powers(this, this.rng);
-      this.civs = new Civs(this, this.rng);
+      this.powers = new Powers(this, this.rngFor('powers'));
+      this.civs = new Civs(this, this.rngFor('civs'));
       this.run = new RunController(this);
       for (const id of (devParams().get('powers') ?? '').split(',').filter(Boolean)) this.powers.take(id);
+      if (this.mod.startPower) {
+        const r = this.rngFor('startPower');
+        this.powers.take(POWER_LIST[Math.floor(r() * POWER_LIST.length)].id);
+      }
     }
     this.autopilot = autopilotEnabled() && (this.mode === 'run' || this.mode === 'level') ? new Autopilot(this) : null;
     cam.setZoom((CAMERA.screenRadius / this.bh.radius) * this.zoomBase);
@@ -183,6 +199,7 @@ export default class GameScene extends Phaser.Scene {
     this.hud = new Hud({
       mode: this.mode,
       level: this.level,
+      challenge: this.challenge,
       maxTier: highestTierUnlocked(),
       tier: this.sandboxTier,
       spawnTypes: this.mode === 'sandbox' ? this.sandboxSpawnTypes() : [],
@@ -202,7 +219,7 @@ export default class GameScene extends Phaser.Scene {
     }
     this.scene.launch('UIScene', { mode: this.mode });
     this.ui = this.scene.get('UIScene');
-    if (this.run) this.news = new News(this.ui, this.rng);
+    if (this.run) this.news = new News(this.ui, this.rngFor('news'));
 
     // ---- Input ----
     this.input.mouse?.disableContextMenu();
@@ -225,8 +242,16 @@ export default class GameScene extends Phaser.Scene {
     this.time.delayedCall(50, () => {
       if (this.mode === 'run') {
         const era = this.run.era;
-        toast(save.runsPlayed === 0 ? 'Hold and drag to move · eat, or evaporate' : era.blurb, 3500);
-        this.ui.showBanner(`Era ${era.id}`, era.name, 2);
+        if (this.daily) {
+          toast(`Daily Universe #${this.daily.universe} · ${this.mod.name}: ${this.mod.desc}`, 4200);
+          this.ui.showBanner(`Universe #${this.daily.universe}`, this.mod.name, 2.4);
+        } else if (this.challenge) {
+          toast(`Eat the Milky Way in under ${Math.round(CHALLENGE.seconds / 60)} minutes: clear the Quasar Era`, 4200);
+          this.ui.showBanner('Challenge', 'Eat the Milky Way', 2.2);
+        } else {
+          toast(save.runsPlayed === 0 ? 'Hold and drag to move · eat, or evaporate' : era.blurb, 3500);
+          this.ui.showBanner(`Era ${era.id}`, era.name, 2);
+        }
       }
       if (this.mode === 'level') {
         const msg = this.level.boss
@@ -277,6 +302,11 @@ export default class GameScene extends Phaser.Scene {
   drawWorldEdge() {
     const w = WORLD_EDGE.lineWidth * (this.startRadius / CAMERA.screenRadius);
     this.edge.clear().lineStyle(w, COLORS.hairline, WORLD_EDGE.alpha).strokeCircle(0, 0, this.worldRadius);
+  }
+
+  /** Random numbers for one system: seeded streams in a Daily Universe, Math.random otherwise. */
+  rngFor(name) {
+    return this.daily ? stream(this.daily.seed, name) : Math.random;
   }
 
   currentKg() {
@@ -362,6 +392,7 @@ export default class GameScene extends Phaser.Scene {
         evaporating: this.run.evaporating && this.run.lossRate > 0,
         quasar: this.run.era.quasar ? this.run.quasarMeter : undefined,
         jets: this.powers?.has('jets') ? { charge: this.powers.jetCharge(), auto: this.powers.synergies.has('pulsar') } : null,
+        clock: this.challenge ? this.elapsed : undefined,
       });
     }
     if (this.recorder?.recording) this.hud.setRecTime(this.recorder.elapsed);
@@ -670,7 +701,7 @@ export default class GameScene extends Phaser.Scene {
       time: this.elapsed,
       canRevive: !r.completed && !this.revived,
       canDouble: r.reward.total > 0,
-      onAgain: () => flow.startRun(),
+      onAgain: () => flow.startRun({ daily: this.isDaily, challenge: this.challenge }),
       onShop: () => flow.goShop({ from: 'run' }),
       onMenu: () => flow.goMenu('title'),
       onRevive: () => showRewardedAd(() => {
@@ -882,10 +913,10 @@ export default class GameScene extends Phaser.Scene {
         this.scene.resume();
       },
       onRestart: () => {
-        if (this.mode === 'run') flow.startRun();
+        if (this.mode === 'run') flow.startRun({ daily: this.isDaily, challenge: this.challenge });
         else if (this.mode === 'level') flow.startLevel(this.levelNum);
         else if (this.mode === 'sandbox') flow.startSandbox(this.sandboxTier);
-        else flow.startScenario(this.scenarioId);
+        else flow.startScenario(this.scenarioId, this.scenarioData);
       },
       onQuit: () => flow.goMenu(backTo, this.mode === 'level' ? { selected: this.levelNum } : {}),
       quitLabel: this.mode === 'level' ? 'Star chart' : this.mode === 'run' ? 'Main menu' : 'Sandbox menu',
@@ -954,7 +985,7 @@ export default class GameScene extends Phaser.Scene {
             renderScenarioEnd({
               scenario: def,
               clipSaved: saved,
-              onReplay: () => flow.startScenario(this.scenarioId),
+              onReplay: () => flow.startScenario(this.scenarioId, this.scenarioData),
               onBack: () => flow.goMenu('sandbox'),
             });
           };

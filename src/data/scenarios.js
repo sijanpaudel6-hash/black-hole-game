@@ -39,6 +39,21 @@ export const SCENARIOS = [
   },
 ];
 
-export function getScenario(id) {
+// Feed Your Hometown is reached from its own screen (src/ui/hometown.js); its words depend on the place.
+export const HOMETOWN_SCENARIO = {
+  id: 'hometown',
+  title: 'Feed your hometown',
+  blurb: 'Pick a city or country and watch your black hole swallow it.',
+  caption: 'Feeding {name} to a black hole',
+  cta: "Comment your city · I'll feed it next",
+  fact: 'The nearest known black hole, Gaia BH1, is about {ly} light-years from {name}. {name} is safe.',
+};
+
+export function getScenario(id, data) {
+  if (id === 'hometown') {
+    const name = data?.place?.name ?? 'your hometown';
+    const fill = (t) => t.replaceAll('{name}', name).replaceAll('{ly}', '1,560');
+    return { ...HOMETOWN_SCENARIO, caption: fill(HOMETOWN_SCENARIO.caption), fact: fill(HOMETOWN_SCENARIO.fact) };
+  }
   return SCENARIOS.find((s) => s.id === id);
 }

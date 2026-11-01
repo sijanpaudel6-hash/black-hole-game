@@ -7,7 +7,9 @@ import { RUN, QUASAR, FINALE, SPAWNER, LEVEL, COLORS, GROWTH, DEPTH, DISK, EFFEC
 import { radiusForMass } from '../objects/BlackHole.js';
 import { effects as upgrades, eraStardust, runStardust } from './economy.js';
 import { getSave, writeSave } from './save.js';
-import { massToKg, todayKey, ageText } from './format.js';
+import { massToKg, todayKey, ageText, formatTime } from './format.js';
+import { submitTime, bestTimes } from './leaderboard.js';
+import { recordDaily, dailyRecord } from './daily.js';
 import { audio } from './audio.js';
 import { toast } from '../ui/dom.js';
 
@@ -46,9 +48,13 @@ export default class RunController {
     s.startMass = this.eraStartMass;
     s.startRadius = radiusForMass(this.eraStartMass);
     s.target = era.goal;
-    s.spawner.setWeights(era.weights);
+    const mod = s.mod ?? {};
+    const weights = { ...era.weights };
+    if (mod.rivalWeight && weights.rival) weights.rival *= mod.rivalWeight;
+    s.spawner.setWeights(weights);
     s.spawner.startMass = this.eraStartMass;
-    s.spawner.rootTarget = Math.min(SPAWNER.count + SPAWNER.reserve - 40, Math.round(SPAWNER.count * (era.countScale ?? 1)));
+    const count = (era.countScale ?? 1) * (era.id === 1 ? mod.dawnCount ?? 1 : 1);
+    s.spawner.rootTarget = Math.min(SPAWNER.count + SPAWNER.reserve - 40, Math.round(SPAWNER.count * count));
     s.spawner.spawnFraction = 1;
     const world = LEVEL.worldRadius * s.startRadius;
     if (world > s.worldRadius) {
@@ -88,7 +94,12 @@ export default class RunController {
   progress() {
     const era = this.era;
     if (era.goal) return Phaser.Math.Clamp((this.scene.bh.mass - this.eraStartMass) / (era.goal - this.eraStartMass), 0, 1);
-    return Phaser.Math.Clamp(this.eraTime / era.duration, 0, 1);
+    return Phaser.Math.Clamp(this.eraTime / this.eraDuration(), 0, 1);
+  }
+
+  /** Far Future length (a Daily Universe modifier can stretch it). */
+  eraDuration() {
+    return (this.era.duration ?? 0) * (this.scene.mod?.farFuture ?? 1);
   }
 
   /** Cosmic age in years for the HUD. */
@@ -129,8 +140,8 @@ export default class RunController {
       this.advance();
     } else if (era.duration) {
       // Far Future: eaten things stop coming back, so food slowly runs out.
-      s.spawner.spawnFraction = Math.max(0, 1 - this.eraTime / era.duration);
-      if (this.eraTime >= era.duration) this.finale();
+      s.spawner.spawnFraction = Math.max(0, 1 - this.eraTime / this.eraDuration());
+      if (this.eraTime >= this.eraDuration()) this.finale();
     }
   }
 
@@ -150,6 +161,15 @@ export default class RunController {
     const s = this.scene;
     this.closeEraStardust();
     if (this.quasarTimer > 0) this.endQuasar();
+    // Clearing the Quasar Era = eating the Milky Way (the challenge clock stops here).
+    if (this.era.id === RUN.eras.length - 1 && this.milkyWayTime == null) {
+      this.milkyWayTime = s.elapsed;
+      if (s.challenge) {
+        this.finishChallenge();
+        return;
+      }
+      s.time.delayedCall(2600, () => s.ui.showMilestone(`MILKY WAY EATEN · ${formatTime(this.milkyWayTime)}`));
+    }
     this.eraIndex++;
     this.eraTime = 0;
     const era = this.era;
@@ -171,7 +191,7 @@ export default class RunController {
     const s = this.scene;
     while (this.gains.length && this.gains[0][0] < this.eraTime - QUASAR.window) this.gains.shift();
     const sum = this.gains.reduce((a, g) => a + g[1], 0);
-    const needed = QUASAR.igniteGain * s.bh.mass;
+    const needed = QUASAR.igniteGain * (s.mod?.quasarIgnite ?? 1) * s.bh.mass;
     if (this.quasarTimer > 0) {
       this.quasarTimer -= dt;
       this.quasarMeter = this.quasarTimer / QUASAR.duration;
@@ -227,6 +247,20 @@ export default class RunController {
   }
 
   // ---- Endings ----
+
+  /** Milky Way challenge: the run ends as soon as the Quasar Era is cleared. */
+  finishChallenge() {
+    const s = this.scene;
+    this.finished = true;
+    this.challengeDone = true;
+    s.ended = true;
+    audio.setRumble(0);
+    s.tierUpMoment('Milky Way eaten', formatTime(this.milkyWayTime));
+    audio.win();
+    const board = submitTime(this.milkyWayTime, { powers: s.powers?.owned().map((p) => p.id) ?? [] });
+    this.challengeRank = board;
+    s.time.delayedCall(2800, () => this.finishRun(true));
+  }
 
   die(reason) {
     if (this.finished) return;
@@ -331,6 +365,7 @@ export default class RunController {
     this.closeEraStardust();
     this.stardustSoFar += s.civs?.extraStardust ?? 0;
     if (s.civs) s.civs.extraStardust = 0;
+    if (this.challengeDone) completed = true;
     const reward = runStardust(this.stardustSoFar, completed, RUN.completeBonus);
     this.stardustSoFar = 0; // a revive keeps earning from here
     const save = getSave();
@@ -338,7 +373,7 @@ export default class RunController {
     if (reward.daily) save.lastDailyWin = todayKey();
     if (!this.counted) save.runsPlayed += 1; // a revived run still counts once
     this.counted = true;
-    if (completed) save.runsCompleted += 1;
+    if (completed && !this.challengeDone) save.runsCompleted += 1;
     save.bestEra = Math.max(save.bestEra, this.era.id);
     save.bestRunKg = Math.max(save.bestRunKg, this.peakKg);
     // Science cards: card 1 after your first run, card N for reaching era N.
@@ -349,8 +384,29 @@ export default class RunController {
         newCards.push(id);
       }
     }
+    // Everything the share card and end screen need.
+    const share = {
+      universe: s.daily?.universe ?? null,
+      modifier: s.daily ? s.mod.name : null,
+      challenge: !!s.challenge,
+      challengeDone: !!this.challengeDone,
+      completed: completed && !this.challengeDone,
+      reason: this.deathReason,
+      eraId: this.era.id,
+      age: this.age(),
+      peakKg: this.peakKg,
+      civsEaten: s.civs?.eaten ?? 0,
+      civsSpared: s.civs?.spared ?? 0,
+      quasars: this.quasarCount ?? 0,
+      milkyWayTime: this.milkyWayTime ?? null,
+      powers: s.powers?.summary().powers ?? [],
+    };
+    const dailyResult = s.daily ? recordDaily({ era: this.era.id, peakKg: this.peakKg, completed, share }) : null;
     writeSave();
     s.showRunEnd({
+      share,
+      daily: s.daily ? { ...s.daily, modifier: s.mod, attempt: dailyRecord().attempts, best: dailyRecord().best, newBest: dailyResult?.best } : null,
+      challenge: s.challenge ? { done: !!this.challengeDone, time: this.milkyWayTime, rank: this.challengeRank?.rank ?? null, best: bestTimes() } : null,
       completed,
       reason: this.deathReason,
       killer: s.killer?.rivalName,

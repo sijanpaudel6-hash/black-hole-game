@@ -1,9 +1,10 @@
 // Pause menu, level complete / failed, scenario end (HTML modals over the game).
 
-import { mount, on, clear } from './dom.js';
+import { mount, on, clear, toast } from './dom.js';
+import { shareResult, shareText, copyText, saveImage } from '../systems/share.js';
 import { ICONS } from './icons.js';
-import { kgHtml, formatInt, formatTimePrecise, ageText } from '../systems/format.js';
-import { RUN } from '../config.js';
+import { kgHtml, formatInt, formatTimePrecise, ageText, formatTime } from '../systems/format.js';
+import { RUN, CHALLENGE } from '../config.js';
 import { nextUpgradeGoal } from '../systems/economy.js';
 import { settingsRowsHtml, toggleSetting } from './menus.js';
 
@@ -154,6 +155,14 @@ export function renderScenarioEnd({ scenario, clipSaved, onReplay, onBack }) {
   on(node, { '[data-act=replay]': onReplay, '[data-act=back]': onBack });
 }
 
+function challengeBoardHtml(ch) {
+  const rows = ch.best
+    .slice(0, 3)
+    .map((t, i) => `<div class="row"><span class="label">${i === ch.rank - 1 ? '▶ ' : ''}#${i + 1} · ${t.date}</span><span class="val ${i === ch.rank - 1 ? 'amber' : ''}">${formatTime(t.seconds)}</span></div>`)
+    .join('');
+  return rows ? `<div class="stats challenge-board"><div class="row"><span class="label science">Your best times (this device)</span><span></span></div>${rows}</div>` : '';
+}
+
 function powersRow(summary) {
   if (!summary || !summary.powers.length) return '';
   const icons = summary.powers.map((x) => `<span class="pc-chip" title="${x.name}">${ICONS[x.id]}<b>${x.level}</b></span>`).join('');
@@ -166,23 +175,33 @@ function powersRow(summary) {
  * @param {object} p see RunController.finishRun / GameScene.showRunEnd
  */
 export function renderRunEnd(p) {
-  const title = p.completed ? 'The last light' : p.reason === 'evaporated' ? 'Evaporated' : 'Swallowed';
-  const sub = p.completed
-    ? 'You outlived every star in the universe'
-    : p.reason === 'evaporated'
-      ? 'Hawking radiation took the last of you'
-      : p.killer
-        ? `Eaten by ${p.killer}`
-        : 'A bigger black hole ate you';
+  const ch = p.challenge;
+  const title = ch?.done ? 'Milky Way eaten' : p.completed ? 'The last light' : p.reason === 'evaporated' ? 'Evaporated' : 'Swallowed';
+  const sub = ch?.done
+    ? ch.time <= CHALLENGE.seconds ? `In ${formatTime(ch.time)} · under ${Math.round(CHALLENGE.seconds / 60)} minutes!` : `In ${formatTime(ch.time)} · ${formatTime(ch.time - CHALLENGE.seconds)} over the target`
+    : p.completed
+      ? 'You outlived every star in the universe'
+      : p.reason === 'evaporated'
+        ? 'Hawking radiation took the last of you'
+        : p.killer
+          ? `Eaten by ${p.killer}`
+          : 'A bigger black hole ate you';
+  const chip = p.daily ? `Daily Universe #${p.daily.universe}` : ch ? 'Milky Way challenge' : p.completed ? 'Run complete' : 'Run over';
   const segs = RUN.eras.map((e) => `<i class="${e.id <= p.era.id ? 'on' : ''}"></i>`).join('');
   const node = mount(
     'modal',
     `<div class="modal-backdrop solid fade-in">
       <div class="screen end-screen" style="position:relative;min-height:100%">
-        <span class="chip end-chip ${p.completed ? '' : 'fail'}"><i class="dot"></i>${p.completed ? 'Run complete' : 'Run over'}</span>
+        <span class="chip end-chip ${p.completed ? '' : 'fail'}"><i class="dot"></i>${chip}</span>
         <div class="end-rule"><i></i><b></b><i></i></div>
         <div class="display end-title">${title}</div>
         <div class="label end-sub">${sub}</div>
+        ${p.daily ? `<div class="label science end-note">${p.daily.modifier.name} · attempt ${p.daily.attempt}${p.daily.newBest ? ' · your best today' : ''}</div>` : ''}
+        ${ch ? challengeBoardHtml(ch) : ''}
+        <div class="share-row">
+          <button class="btn-secondary share-btn" data-act="share">${ICONS.share} Share your universe</button>
+          <div class="share-links"><button class="btn-text" data-act="copy">[ Copy text ]</button><button class="btn-text" data-act="image">[ Save image ]</button></div>
+        </div>
         <div class="stats">
           <div class="row"><span class="label">Reached</span><span class="val">Era ${p.era.id} · ${p.era.name}</span></div>
           <div class="row" style="display:block"><div class="meter" style="grid-template-columns:repeat(5,1fr)">${segs}</div></div>
@@ -190,6 +209,8 @@ export function renderRunEnd(p) {
           <div class="row"><span class="label">Peak mass</span><span class="val amber">${kgHtml(p.peakKg, 3)}</span></div>
           <div class="row"><span class="label">Objects consumed</span><span class="val">${formatInt(p.objects)} bodies</span></div>
           <div class="row"><span class="label">Run time</span><span class="val">${formatTimePrecise(p.time)}</span></div>
+          ${p.share.civsEaten || p.share.civsSpared ? `<div class="row"><span class="label">Civilisations</span><span class="val">${p.share.civsEaten} eaten · ${p.share.civsSpared} spared</span></div>` : ''}
+          ${p.share.milkyWayTime && !ch ? `<div class="row"><span class="label">Milky Way eaten in</span><span class="val">${formatTime(p.share.milkyWayTime)}</span></div>` : ''}
           ${powersRow(p.powers)}
         </div>
         <div class="reward">
@@ -200,7 +221,7 @@ export function renderRunEnd(p) {
         ${p.completed ? `<div class="label amber reward-note">Full life bonus · ×${RUN.completeBonus}</div>` : ''}
         ${goalHtml()}
         <div class="end-actions">
-          <button class="btn-primary split" data-act="again"><span>New run</span>${ICONS.arrow}</button>
+          <button class="btn-primary split" data-act="again"><span>${p.daily ? 'Play again' : ch ? 'Try again' : 'New run'}</span>${ICONS.arrow}</button>
           ${p.canRevive ? `<button class="btn-secondary" data-act="revive">${ICONS.play} Revive · Watch ad</button>` : ''}
           ${p.canDouble ? `<button class="btn-secondary" data-act="double">${ICONS.play} ×2 Stardust · Watch ad</button>` : ''}
           <div class="title-links">
@@ -212,7 +233,17 @@ export function renderRunEnd(p) {
       </div>
     </div>`,
   );
+  const status = (msg) => toast(msg, 2200);
   on(node, {
+    '[data-act=share]': async (_e, b) => {
+      b.disabled = true;
+      const r = await shareResult(p.share);
+      b.disabled = false;
+      if (r === 'copied') status('Share text copied · paste it anywhere');
+      else if (r === 'failed') status('Could not share · try Save image');
+    },
+    '[data-act=copy]': async () => status((await copyText(shareText(p.share))) ? 'Copied' : 'Could not copy'),
+    '[data-act=image]': async () => status((await saveImage(p.share)) ? 'Image saved' : 'Could not save the image'),
     '[data-act=again]': p.onAgain,
     '[data-act=shop]': p.onShop,
     '[data-act=menu]': p.onMenu,

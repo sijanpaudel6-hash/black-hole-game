@@ -179,7 +179,7 @@ export default class UIScene extends Phaser.Scene {
    * @param {string} label
    * @param {number} [seconds] auto-clear after this long
    */
-  setPointer(id, target, color, label, seconds = 0) {
+  setPointer(id, target, color, label, seconds = 0, onScreenLabel = false) {
     if (!this.ready) return;
     let p = this.pointers[id];
     if (!p) {
@@ -194,6 +194,7 @@ export default class UIScene extends Phaser.Scene {
     p.color = color;
     p.t.setText(label.toUpperCase()).setColor(`#${color.toString(16).padStart(6, '0')}`);
     p.until = seconds ? this.time.now + seconds * 1000 : 0;
+    p.onScreenLabel = onScreenLabel || id === 'gift';
     p.g.setVisible(true);
     p.t.setVisible(true);
   }
@@ -218,7 +219,7 @@ export default class UIScene extends Phaser.Scene {
       const sy = (tg.y - cam.worldView.y) * cam.zoom;
       const m = 70;
       const onScreen = sx > m && sx < W - m && sy > H * 0.2 && sy < H * 0.8;
-      if (onScreen && id !== 'gift') {
+      if (onScreen && !p.onScreenLabel) {
         p.g.setVisible(false);
         p.t.setVisible(false);
         continue;

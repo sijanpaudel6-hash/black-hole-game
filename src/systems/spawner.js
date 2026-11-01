@@ -29,6 +29,7 @@ export default class Spawner {
     this.worldRadius = opts.worldRadius;
     this.startMass = opts.startMass;
     this.cb = opts.callbacks;
+    this.rng = opts.rng ?? Math.random; // which types spawn (seeded in a Daily Universe)
     this.objects = [];
     for (let i = 0; i < SPAWNER.count + SPAWNER.reserve; i++) this.objects.push(new SpaceObject(scene));
     this.rings = [];
@@ -62,7 +63,7 @@ export default class Spawner {
 
   pickType() {
     for (let attempt = 0; attempt < 6; attempt++) {
-      let roll = Math.random() * this.totalWeight;
+      let roll = this.rng() * this.totalWeight;
       let type = this.types[this.types.length - 1];
       for (let i = 0; i < this.types.length; i++) {
         roll -= this.weightList[i];
