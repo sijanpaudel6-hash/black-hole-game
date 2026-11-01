@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME, COLORS, HUD, RECORDING } from '../config.js';
+import { GAME, COLORS, HUD, RECORDING, NEWS } from '../config.js';
 import { splitSci } from '../systems/format.js';
 
 const W = GAME.width;
@@ -43,7 +43,210 @@ export default class UIScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setAlpha(0)
       .setDepth(60);
+    this.buildCivCard();
+    this.buildTicker();
+    this.quote = this.text(W / 2, H * 0.62, '', HUD.fontBody, 30, COLORS.textCss, { align: 'center', wordWrap: { width: 600 }, fontStyle: 'italic' })
+      .setOrigin(0.5)
+      .setAlpha(0)
+      .setDepth(19);
+    this.quote.setStroke(COLORS.voidCss, 8);
+    this.pointers = {};
     this.ready = true;
+  }
+
+  // ---- Civilisation message card (in the canvas, so it's in clips) ----
+
+  buildCivCard() {
+    const c = this.add.container(0, 0).setDepth(25).setVisible(false);
+    this.civBg = this.add.graphics();
+    this.civKicker = this.text(40, 26, '', HUD.fontMono, 20, COLORS.amberCss).setFontStyle('');
+    this.civKicker.setLetterSpacing(3);
+    this.civName = this.text(40, 56, '', HUD.fontHead, 40, COLORS.textCss);
+    this.civName.setLetterSpacing(2).setFontStyle('');
+    this.civMeta = this.text(40, 102, '', HUD.fontMono, 19, COLORS.textMutedCss).setFontStyle('');
+    this.civText = this.text(40, 140, '', HUD.fontBody, 29, COLORS.textCss, { wordWrap: { width: W - 160 }, lineSpacing: 6 });
+    this.civOffer = this.text(40, 0, '', HUD.fontMono, 20, COLORS.scienceCss).setFontStyle('');
+    this.civOffer.setLetterSpacing(2);
+    c.add([this.civBg, this.civKicker, this.civName, this.civMeta, this.civText, this.civOffer]);
+    this.civCard = c;
+  }
+
+  /** Top of the civilisation card: below the HUD normally, below the mass panel while recording. */
+  civCardTop() {
+    return this.recording ? H * 0.31 : H * 0.215;
+  }
+
+  showCivCard(c) {
+    if (!this.ready) return;
+    this.civKicker.setText(`●  INCOMING TRANSMISSION`).setColor(c.hostile ? COLORS.dangerCss : COLORS.amberCss);
+    this.civName.setText(`${c.species.toUpperCase()} OF ${c.planet.toUpperCase()}`);
+    this.civMeta.setText(`${c.tech.toUpperCase()} · ${c.kind.toUpperCase()} · ${c.mood.toUpperCase()}`);
+    this.civText.setText(`“${c.text}”`);
+    let h = this.civText.y + this.civText.height + 22;
+    if (c.offer) {
+      this.civOffer.setText(`SPARE US → ${c.offer.toUpperCase()}`).setY(h).setVisible(true);
+      h += 34;
+    } else this.civOffer.setVisible(false);
+    h += 10;
+    const w = W - 80;
+    this.civBg.clear();
+    this.civBg.fillStyle(COLORS.panel, 0.94).fillRoundedRect(0, 0, w, h, 8);
+    this.civBg.lineStyle(2, c.hostile ? COLORS.danger : COLORS.amber, 1).strokeRoundedRect(0, 0, w, h, 8);
+    this.civCardHeight = h;
+    this.civCard.setPosition(40, this.civCardTop()).setVisible(true).setAlpha(0);
+    this.tweens.killTweensOf(this.civCard);
+    this.tweens.add({ targets: this.civCard, alpha: 1, duration: 220 });
+  }
+
+  hideCivCard() {
+    if (!this.ready || !this.civCard.visible) return;
+    this.tweens.killTweensOf(this.civCard);
+    this.tweens.add({ targets: this.civCard, alpha: 0, duration: 220, onComplete: () => this.civCard.setVisible(false) });
+  }
+
+  /** Bottom edge of the civ card in design px (the HUD puts the EAT / SPARE buttons under it). */
+  civCardBottom() {
+    return this.civCardTop() + (this.civCardHeight ?? 260);
+  }
+
+  /** A line of dialogue (last words, thanks) under the black hole. */
+  showQuote(text, seconds = 3) {
+    if (!this.ready) return;
+    this.quote.setText(text).setAlpha(0);
+    this.tweens.killTweensOf(this.quote);
+    this.tweens.add({ targets: this.quote, alpha: 1, duration: 250 });
+    this.tweens.add({ targets: this.quote, alpha: 0, delay: seconds * 1000, duration: 400 });
+  }
+
+  // ---- Galactic News ticker ----
+
+  buildTicker() {
+    const h = 44;
+    this.tickerH = h;
+    this.tickerBg = this.add.graphics();
+    this.tickerTag = this.text(18, h / 2, 'GALACTIC NEWS', HUD.fontHead, 24, COLORS.voidCss).setOrigin(0, 0.5).setFontStyle('');
+    this.tickerTag.setLetterSpacing(2);
+    const tagW = this.tickerTag.width + 36;
+    this.tickerTagW = tagW;
+    this.tickerText = this.text(tagW + 14, h / 2, '', HUD.fontMono, 22, COLORS.textCss).setOrigin(0, 0.5).setFontStyle('');
+    const maskG = this.make.graphics({ add: false });
+    this.tickerMaskG = maskG;
+    this.tickerText.setMask(maskG.createGeometryMask());
+    this.ticker = this.add.container(0, 0, [this.tickerBg, this.tickerTag, this.tickerText]).setDepth(18).setVisible(false);
+    this.drawTicker();
+  }
+
+  tickerTop() {
+    return this.recording ? H * 0.268 : H * 0.165;
+  }
+
+  drawTicker() {
+    // Leaves room for the record button on the right.
+    const w = W - 32 - 150;
+    const h = this.tickerH;
+    this.tickerBg.clear();
+    this.tickerBg.fillStyle(COLORS.panel, 0.9).fillRect(0, 0, w, h);
+    this.tickerBg.lineStyle(2, COLORS.hairline, 1).strokeRect(0, 0, w, h);
+    this.tickerBg.fillStyle(COLORS.amber, 1).fillRect(0, 0, this.tickerTagW, h);
+    this.tickerW = w;
+  }
+
+  /** @returns {number} seconds the headline will be on screen */
+  showHeadline(text, seconds) {
+    if (!this.ready) return seconds;
+    const top = this.tickerTop();
+    this.ticker.setPosition(32, top).setVisible(true).setAlpha(0);
+    this.tickerText.setText(text.toUpperCase());
+    const room = this.tickerW - this.tickerTagW - 28;
+    const over = Math.max(0, this.tickerText.width - room);
+    const scroll = over > 0 ? over / NEWS.scrollSpeed : 0;
+    const total = seconds + scroll;
+    this.tickerMaskG.clear().fillStyle(0xffffff).fillRect(32 + this.tickerTagW + 4, top, this.tickerW - this.tickerTagW - 8, this.tickerH);
+    this.tickerText.x = this.tickerTagW + 14;
+    this.tweens.killTweensOf([this.ticker, this.tickerText]);
+    this.tweens.add({ targets: this.ticker, alpha: 1, duration: 250 });
+    if (scroll > 0) this.tweens.add({ targets: this.tickerText, x: this.tickerTagW + 14 - over, delay: 1200, duration: scroll * 1000, ease: 'Linear' });
+    this.tweens.add({ targets: this.ticker, alpha: 0, delay: (total + 1) * 1000, duration: 350 });
+    return total + 1.6;
+  }
+
+  // ---- Scanner arrows pointing at off-screen things (civilisations, gifts, events) ----
+
+  /**
+   * @param {string} id
+   * @param {{x:number,y:number,inUse?:boolean}} target world position (an object is followed while inUse)
+   * @param {number} color
+   * @param {string} label
+   * @param {number} [seconds] auto-clear after this long
+   */
+  setPointer(id, target, color, label, seconds = 0, onScreenLabel = false) {
+    if (!this.ready) return;
+    let p = this.pointers[id];
+    if (!p) {
+      const g = this.add.graphics();
+      const t = this.text(0, 0, '', HUD.fontMono, 20, COLORS.textCss).setOrigin(0.5).setFontStyle('');
+      t.setStroke(COLORS.voidCss, 6);
+      p = { g, t };
+      this.pointers[id] = p;
+    }
+    p.target = target;
+    p.gen = target.gen;
+    p.color = color;
+    p.t.setText(label.toUpperCase()).setColor(`#${color.toString(16).padStart(6, '0')}`);
+    p.until = seconds ? this.time.now + seconds * 1000 : 0;
+    p.onScreenLabel = onScreenLabel || id === 'gift';
+    p.g.setVisible(true);
+    p.t.setVisible(true);
+  }
+
+  clearPointer(id) {
+    const p = this.pointers?.[id];
+    if (!p) return;
+    p.target = null;
+    p.g.setVisible(false);
+    p.t.setVisible(false);
+  }
+
+  updatePointers(cam) {
+    for (const [id, p] of Object.entries(this.pointers)) {
+      if (!p.target) continue;
+      const tg = p.target;
+      if ((p.until && this.time.now > p.until) || tg.inUse === false || (p.gen !== undefined && tg.gen !== p.gen)) {
+        this.clearPointer(id);
+        continue;
+      }
+      const sx = (tg.x - cam.worldView.x) * cam.zoom;
+      const sy = (tg.y - cam.worldView.y) * cam.zoom;
+      const m = 70;
+      const onScreen = sx > m && sx < W - m && sy > H * 0.2 && sy < H * 0.8;
+      if (onScreen && !p.onScreenLabel) {
+        p.g.setVisible(false);
+        p.t.setVisible(false);
+        continue;
+      }
+      p.g.setVisible(true);
+      p.t.setVisible(true);
+      const cx = W / 2;
+      const cy = H / 2;
+      const ang = Math.atan2(sy - cy, sx - cx);
+      // Clamp to an inner rectangle so the arrow never hides under the HUD.
+      const rx = W / 2 - m;
+      const ry = H * 0.27;
+      const k = Math.min(rx / Math.abs(Math.cos(ang) || 1e-6), ry / Math.abs(Math.sin(ang) || 1e-6));
+      const x = onScreen ? sx : cx + Math.cos(ang) * k;
+      const y = onScreen ? sy - 60 : cy + Math.sin(ang) * k;
+      const pulse = 0.7 + 0.3 * Math.sin(this.time.now / 160);
+      p.g.clear();
+      p.g.fillStyle(p.color, pulse);
+      const a = onScreen ? Math.PI / 2 : ang;
+      const s = 18;
+      p.g.fillTriangle(
+        x + Math.cos(a) * s, y + Math.sin(a) * s,
+        x + Math.cos(a + 2.5) * s, y + Math.sin(a + 2.5) * s,
+        x + Math.cos(a - 2.5) * s, y + Math.sin(a - 2.5) * s,
+      );
+      p.t.setPosition(x - Math.cos(a) * 34, y - Math.sin(a) * 34);
+    }
   }
 
   text(x, y, s, font, size, color, extra = {}) {
@@ -94,6 +297,9 @@ export default class UIScene extends Phaser.Scene {
     if (!this.ready) return;
     this.recording = on;
     this.recGroup.setVisible(on);
+    // Keep the ticker and message card clear of the recording mass panel.
+    if (this.ticker.visible) this.ticker.y = this.tickerTop();
+    if (this.civCard.visible) this.civCard.y = this.civCardTop();
   }
 
   updateRecordMass(kg) {
@@ -197,6 +403,7 @@ export default class UIScene extends Phaser.Scene {
 
     // Labels follow the black hole on screen.
     const cam = gs.cameras.main;
+    this.updatePointers(cam);
     const bx = (gs.bh.x - cam.worldView.x) * cam.zoom;
     const by = (gs.bh.y - cam.worldView.y) * cam.zoom;
     const br = gs.bh.drawnRadius * cam.zoom;
@@ -211,7 +418,7 @@ export default class UIScene extends Phaser.Scene {
       }
       l.c.setVisible(true);
       const a = age < 0.15 ? age / 0.15 : age > l.life - 0.3 ? (l.life - age) / 0.3 : 1;
-      l.c.setAlpha(a).setScale(0.9 + 0.1 * Math.min(1, age / 0.15));
+      l.c.setAlpha(a * (this.civCard.visible ? 0.25 : 1)).setScale(0.9 + 0.1 * Math.min(1, age / 0.15));
       const x = Phaser.Math.Clamp(bx + br + 24, 70, W - 70 - l.w);
       // Newest label just above the black hole, the older one stacked above it; both stay
       // below the recording mass panel.

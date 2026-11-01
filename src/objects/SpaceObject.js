@@ -44,6 +44,12 @@ export default class SpaceObject extends Phaser.GameObjects.Image {
     this.feeding = false;
     this.pulled = false;
     this.think = 0;
+    // Flags set by powers, civilisations and events (cleared on every reuse).
+    this.hidden = false; // Gravitational Lens treasure
+    this.spared = false; // a spared civilisation: can't be eaten
+    this.civ = null; // civilisation riding on this planet
+    this.wanderer = false; // a runaway black hole (cosmic event)
+    this.displayName = opts.displayName ?? null; // overrides def.name on labels
     this.targetX = x;
     this.targetY = y;
 

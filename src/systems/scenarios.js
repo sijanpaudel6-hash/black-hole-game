@@ -3,7 +3,8 @@
 // { target } to auto-steer when the player isn't touching the screen.
 
 import Phaser from 'phaser';
-import { COLORS, DEPTH, EFFECTS, FEEDING, GROWTH } from '../config.js';
+import { COLORS, DEPTH, EFFECTS, FEEDING, GROWTH, HOMETOWN, CAMERA } from '../config.js';
+import { drawGlobeTexture } from './globe.js';
 import BlackHole from '../objects/BlackHole.js';
 import { audio } from './audio.js';
 import { kgText } from './format.js';
@@ -276,6 +277,164 @@ const SCRIPTS = {
     };
   },
 };
+
+// ---- Cosmic events as What if…? scenes (Session E) ----
+
+/** Steer toward the nearest thing you can eat when the player isn't touching the screen. */
+function autoEatTarget(scene) {
+  const bh = scene.bh;
+  let best = null;
+  let bestD = Infinity;
+  for (const o of scene.spawner.objects) {
+    if (!o.inUse || !o.visible || o.behaviour === 'rival' || o.radius >= bh.radius * 0.9) continue;
+    const d = Math.hypot(o.x - bh.x, o.y - bh.y);
+    if (d < bestD) {
+      bestD = d;
+      best = o;
+    }
+  }
+  return best ? { x: best.x, y: best.y } : undefined;
+}
+
+function eventScene(type, { mass = 2000, kg = 10 * SUN_KG, delay = 1.2, at = null, autoEat = true, after = 1.6, seekAfter = 0 } = {}) {
+  return (scene) => {
+    setPlayer(scene, mass, kg);
+    // The kg counter follows the black hole's growth (10 Suns at the start).
+    scene.realKg = null;
+    scene.realKgScale = kg / mass;
+    scene.zoomBase = 0.8;
+    let t = 0;
+    let started = false;
+    let done = false;
+    return {
+      update(dt, _realDt, hasInput) {
+        t += dt;
+        if (!started && t > delay && scene.cosmic) {
+          started = true;
+          const bh = scene.bh;
+          scene.cosmic.start(type, { scenario: true, at: at ? { x: bh.x + at[0] * bh.radius, y: bh.y + at[1] * bh.radius } : null });
+          if (scene.cosmic.active) {
+            scene.cosmic.active.onEnd = () => {
+              if (!done) {
+                done = true;
+                scene.finishScenario(after);
+              }
+            };
+          }
+        }
+        if (hasInput || !started) return {};
+        // Wormhole: drift over, then dive in.
+        const ev = scene.cosmic?.active;
+        if (seekAfter && ev && !ev.used && t > delay + seekAfter && ev.x !== undefined) return { target: { x: ev.x, y: ev.y } };
+        if (autoEat || ev?.used) return { target: autoEatTarget(scene) };
+        return {};
+      },
+    };
+  };
+}
+
+SCRIPTS.supernova = eventScene('supernova', { at: [0, -6], after: 0.5 });
+SCRIPTS.tidal = eventScene('tidal', { at: [7, -6] });
+SCRIPTS.wanderer = eventScene('wanderer', { autoEat: true });
+SCRIPTS.wormhole = eventScene('wormhole', { at: [0, -10], autoEat: false, seekAfter: 2.5, after: 2.4 });
+SCRIPTS.whitehole = eventScene('whiteHole', { at: [0, -6], autoEat: false });
+SCRIPTS.darkmatter = eventScene('darkMatter', { at: [0, -3] });
+
+SCRIPTS.hometown = (scene) => {
+  // Feed Your Hometown: Earth turned so the chosen place faces you; the black hole flies
+  // in, swallows it and leaves a hole. Cities and countries only (see src/ui/hometown.js).
+  const H = HOMETOWN;
+  const place = scene.scenarioData?.place ?? { kind: 'city', name: 'Kathmandu', country: 'Nepal', lat: 27.72, lon: 85.31 };
+  const land = scene.scenarioData?.land ?? [];
+  setPlayer(scene, 120, 7.35e22);
+  const bh = scene.bh;
+  const cam = scene.cameras.main;
+  scene.camTarget = null;
+  const R = H.earthRadius;
+  const globe = drawGlobeTexture(scene, 'hometown-globe', land, place.lon, place.lat, H.globeTexture);
+  scene.add.image(0, 0, globe.key).setDepth(DEPTH.edibleObjects - 3).setScale(R / globe.radius);
+  const bite = scene.add.graphics().setDepth(DEPTH.edibleObjects - 2);
+  const marker = scene.add.image(0, 0, 'ring').setTint(COLORS.amber).setDepth(DEPTH.edibleObjects - 1).setScale((R * 0.07) / 124);
+  const dot = scene.add.image(0, 0, 'spark').setTint(COLORS.amber).setDepth(DEPTH.edibleObjects - 1).setScale((R * 0.035) / 16);
+  scene.tweens.add({ targets: marker, scale: (R * 0.1) / 124, alpha: 0.3, duration: 700, yoyo: true, repeat: -1 });
+  const wide = (GAME_W * 0.78) / (2 * R);
+  const close = (CAMERA.screenRadius / bh.radius) * H.zoomIn;
+  const start = { x: -R * 1.9, y: -R * 1.7 };
+  const ctrl = { x: -R * 1.5, y: R * 0.3 };
+  bh.setPosition(start.x, start.y);
+  scene.fixedZoom = wide;
+  cam.setZoom(wide);
+  cam.centerOn(0, 0);
+  let t = 0;
+  let phase = 'approach';
+  let biteT = 0;
+  let labelled = false;
+  const lerp = (a, b, k) => a + (b - a) * k;
+  return {
+    update(dt) {
+      t += dt;
+      if (!labelled && scene.ui?.ready) {
+        labelled = true; // (the UI scene starts after this script is created)
+        scene.ui.setPointer('city', { x: 0, y: 0, inUse: true }, COLORS.amber, place.name, 0, true);
+      }
+      if (phase === 'approach') {
+        const k = Math.min(1, Math.max(0, (t - 0.6) / H.approachTime));
+        const e = k * k * (3 - 2 * k);
+        const m = 1 - e;
+        bh.setPosition(m * m * start.x + 2 * m * e * ctrl.x, m * m * start.y + 2 * m * e * ctrl.y);
+        bh.velocity.set(1, 1);
+        const cz = Math.max(0, (k - 0.35) / 0.65);
+        scene.fixedZoom = lerp(wide, close, cz * cz);
+        cam.centerOn(lerp(0, bh.x, cz), lerp(0, bh.y, cz));
+        if (k >= 1) {
+          phase = 'bite';
+          scene.ui.clearPointer('city');
+          scene.slowMo(0.5, 1.2);
+          scene.shake(EFFECTS.bigShake, 0.6);
+          audio.bassDrop(1);
+          scene.effects.flash(0, 0, bh.radius * 3, COLORS.amber, 0.6);
+          scene.tweens.add({ targets: [marker, dot], scale: 0, alpha: 0, duration: 600 });
+        }
+      } else if (phase === 'bite') {
+        biteT += dt;
+        const k = Math.min(1, biteT / H.biteTime);
+        const r = R * H.biteRadius * Math.sqrt(k);
+        bite.clear();
+        bite.fillStyle(0xff9a4d, 0.35).fillCircle(0, 0, r * 1.25);
+        bite.fillStyle(0x000000, 1).fillCircle(0, 0, r);
+        bh.addMass(dt * 20);
+        bh.boostDisk(0.1);
+        cam.centerOn(0, 0);
+        if (Math.random() < 0.9) {
+          const a = Math.random() * Math.PI * 2;
+          const d = r * 1.3 + Math.random() * R * 0.15;
+          scene.effects.debris(Math.cos(a) * d, Math.sin(a) * d, [0x5d9b4a, 0x2a5fb0, 0xffe0b0, COLORS.amber], 2, bh, bh.radius * 4);
+        }
+        if (Math.random() < 0.15) scene.shake(0.004, 0.1);
+        if (k >= 1) {
+          phase = 'reveal';
+          t = 0;
+          scene.ui.showBanner(place.name, 'Swallowed', 2.6);
+          scene.ui.showLabel(place.kind === 'city' ? place.country : 'Country', `${place.name} · swallowed`, true);
+          audio.chime();
+        }
+      } else if (phase === 'reveal') {
+        // Pull back to show Earth with a hole where the place used to be.
+        const k = Math.min(1, t / 1.6);
+        scene.fixedZoom = lerp(close, wide * 1.15, k * k);
+        cam.centerOn(0, 0);
+        if (k >= 1 && phase !== 'done') {
+          phase = 'done';
+          scene.ui.showCaption(scene.scenarioDef.cta, 3.2);
+          scene.finishScenario(3.4);
+        }
+      } else cam.centerOn(0, 0);
+      return { controlled: true };
+    },
+  };
+};
+
+const GAME_W = 720;
 
 export function createScenario(id, scene) {
   return (SCRIPTS[id] ?? SCRIPTS.earth)(scene);

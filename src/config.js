@@ -218,6 +218,8 @@ export const SANDBOX_UNLOCK_ERA = 2; // ...or after reaching this era in a run
 // The Far Future has no goal: food runs out and the run ends with the black hole as the
 // last light, evaporating.
 //
+// gain: × mass gained from each swallow in this era (on top of EATING.massGain); the main
+// per-era knob for era length (targets: Cosmic Dawn under 1 min, a full run 6–10 min).
 // evaporation: mass lost per second = rate × eraStartMass × (eraStartMass ÷ mass)^exponent
 // (small black holes evaporate faster, like real Hawking radiation). canKill: whether it can
 // evaporate you completely (mass below RUN.deathFactor × the run's starting mass).
@@ -229,32 +231,32 @@ export const RUN = {
   eraEndDelay: 1.6, // seconds of tier-up slow motion before the new era's objects take over
   eras: [
     {
-      id: 1, name: 'Cosmic Dawn', startMass: 20, goal: 100,
+      id: 1, name: 'Cosmic Dawn', startMass: 20, goal: 100, gain: 2.5,
       blurb: 'A primordial black hole in a fog of gas. Eat, or evaporate.',
       weights: { gasWisp: 35, dust: 20, iceCrystal: 15, gasCloud: 25, protostar: 5 },
       background: 0x0e0b1a, stars: [0.15, 0.3], age: [5e7, 2e8],
       evaporation: { rate: 0.008, exponent: 2, canKill: true },
     },
     {
-      id: 2, name: 'First Stars', startMass: 100, goal: 1000,
+      id: 2, name: 'First Stars', startMass: 100, goal: 1000, gain: 0.45,
       blurb: 'Giant early stars light up the dark.',
       weights: { gasWisp: 15, gasCloud: 25, protostar: 30, youngStar: 13, blueStar: 12, blueGiant: 5 },
       background: 0x080a17, stars: [0.45, 0.8], age: [2e8, 1e9],
     },
     {
-      id: 3, name: 'Galaxy Era', startMass: 1000, goal: 10000,
+      id: 3, name: 'Galaxy Era', startMass: 1000, goal: 10000, gain: 0.3,
       blurb: 'Rival black holes compete for the same food. Outgrow them or flee.',
       weights: { youngStar: 10, blueStar: 15, blueGiant: 20, moon: 15, comet: 10, dwarfPlanet: 10, rockyPlanet: 10, gasGiant: 5, rival: 10 },
       background: 0x07080c, stars: [0.9, 1], age: [1e9, 3e9],
     },
     {
-      id: 4, name: 'Quasar Era', startMass: 10000, goal: 100000, countScale: 1.4, quasar: true,
+      id: 4, name: 'Quasar Era', startMass: 10000, goal: 100000, gain: 0.22, countScale: 1.4, quasar: true,
       blurb: 'Food is everywhere. Feed fast enough to ignite as a quasar.',
       weights: { moon: 15, dwarfPlanet: 10, rockyPlanet: 20, gasGiant: 25, redDwarf: 15, sunLikeStar: 10, giantStar: 5 },
       background: 0x0e0a08, stars: [1, 1], age: [3e9, 1.38e10],
     },
     {
-      id: 5, name: 'Far Future', startMass: 100000, goal: null, duration: 75,
+      id: 5, name: 'Far Future', startMass: 100000, goal: null, duration: 40,
       blurb: 'The stars are dying. Eat what is left.',
       weights: { whiteDwarf: 30, redDwarf: 30, gasGiant: 15, giantStar: 10, rival: 8, clusterStar: 7 },
       background: 0x030304, stars: [0.6, 0], age: [1e14, 1e100],
@@ -266,7 +268,7 @@ export const RUN = {
 // Quasar Era: gain this fraction of your mass within `window` seconds to ignite as a quasar.
 export const QUASAR = {
   window: 4,
-  igniteGain: 0.12,
+  igniteGain: 0.1,
   duration: 8, // seconds ignited
   pullBoost: 1.8, // × pull range while ignited
   cooldown: 6,
@@ -282,6 +284,214 @@ export const FINALE = {
   sparkEvery: 0.18, // seconds between little flashes of Hawking radiation
   factTime: 4.5,
   fact: 'When the last black holes evaporate, around 10¹⁰⁰ years from now, the universe goes dark.',
+};
+
+// ---------------------------------------------------------------------------
+// Cosmic powers (runs only): pick 1 of 3 at every era change
+// ---------------------------------------------------------------------------
+// Each power has 3 levels; picking it again levels it up. Per-level values are arrays
+// indexed by level − 1. Names, descriptions and synergies' text live in src/data/powers.js.
+export const POWERS = {
+  choices: 3, // cards offered at each era change
+  maxLevel: 3,
+  offerOwnedChance: 0.6, // chance one of the cards is a power you already own (to level it)
+  synergyOfferChance: 0.5, // chance one card completes a synergy when one is possible
+  // Kerr Spin: the pull swirls, so objects orbit in; also widens the pull.
+  kerrSpin: {
+    pullBonus: [0.2, 0.35, 0.5], // + × pull range
+    swirl: [0.9, 1.25, 1.6], // tangential pull, × the normal pull acceleration
+    diskSpin: [1.8, 2.4, 3], // × accretion disk spin (looks)
+  },
+  // Relativistic Jets: tap the JETS button (or Space) to fire twin jets along your motion.
+  jets: {
+    cooldown: [7, 5.5, 4], // seconds between shots
+    duration: 0.9, // seconds a shot lasts
+    length: [7, 9, 11], // × your radius
+    width: 0.45, // half-width, × your radius
+    breakRatio: [2.2, 3, 4], // shatters objects up to this × your radius (bigger ones get knocked back)
+    rivalShrink: 0.25, // rivals hit lose this share of their mass
+    knockback: 900, // screen px/s given to things too big to shatter
+  },
+  // Tidal Shredder: objects a bit bigger than you crumble when you pass close.
+  shredder: {
+    maxRatio: [1.35, 1.7, 2.1], // crumbles objects up to this × your radius
+    range: [1.25, 1.4, 1.55], // when the gap is under (your radius + theirs) × (range − 1)
+  },
+  // Dark Matter Halo: an invisible halo widens and strengthens your pull.
+  halo: {
+    pullBonus: [0.4, 0.75, 1.1],
+    pullStrength: [0.25, 0.5, 0.75], // + × pull acceleration
+    ringAlpha: 0.14,
+  },
+  // Gravitational Lens: the world slows near massive objects (you don't), and hidden
+  // treasures appear: some objects glow blue and are worth extra.
+  lens: {
+    slowRange: [3, 4, 5], // world slows when a dangerous object's edge is within this × your radius
+    slowScale: [0.65, 0.55, 0.45], // world speed at the closest
+    hiddenChance: [0.08, 0.12, 0.16], // share of new objects that are hidden treasures
+    hiddenMass: 2.5, // treasures give this × mass...
+    hiddenStardust: 3, // ...and count this × for Stardust
+  },
+  // Hawking Bloom: losing mass releases a burst that pushes hazards away.
+  bloom: {
+    lossCut: [0.3, 0.5, 0.7], // share of collision mass loss prevented
+    radius: [7, 9, 11], // burst radius, × your radius
+    push: 1400, // screen px/s given to hazards at the centre
+    invulnerable: [1.4, 1.8, 2.2], // seconds of protection after a burst
+    lastGasp: [false, false, true], // level 3: once per run, a rival about to eat you is blasted away
+  },
+  // Synergies: owning both powers unlocks the combo.
+  pulsar: { sweepTurns: 1, autoFire: true, cooldownScale: 0.85 }, // Kerr Spin + Jets: jets fire themselves and sweep a full circle
+  buzzsaw: { ratioBonus: 0.6, rangeBonus: 0.35, chunkPull: 2.5, ringRadius: 1.7 }, // Kerr Spin + Shredder: a spinning debris saw
+  lensedJets: { lengthScale: 1.5, seekCone: 1.1 }, // Jets + Lens: jets bend toward stars (cone in radians)
+  fragments: { pieces: [4, 6], keep: 0.8, maxRadius: 0.55, speed: 2.2 }, // shattered objects: pieces, mass kept, size × your radius, fling speed (own radii/s)
+};
+
+// ---------------------------------------------------------------------------
+// The Universe Talks Back: civilisations (runs only). Words in src/data/civilisations.js.
+// ---------------------------------------------------------------------------
+export const CIVS = {
+  eras: [3, 4, 5], // eras with civilisations (life needs the heavy elements earlier stars made)
+  firstDelay: 10, // seconds into an era before the first one appears
+  interval: [20, 30], // seconds between civilisations (after the last one is dealt with)
+  sizeRatio: [0.5, 0.68], // planet radius × yours when it appears (always edible)
+  eatMass: 0.08, // eating one adds this share of your current mass
+  eatStardust: 40, // Stardust bonus for eating one...
+  spareStardust: 0, // ...and for sparing one (sparing gives a boon instead)
+  hailRange: 6, // they hail you when your edge is within this × your radius of theirs
+  choiceTime: 9, // real seconds to decide before the message closes
+  slowMo: 0.35, // world speed while you read
+  types: { 3: ['rockyPlanet', 'moon', 'dwarfPlanet'], 4: ['rockyPlanet', 'gasGiant', 'moon'], 5: ['rockyPlanet', 'dwarfPlanet'] },
+  techWeights: {
+    3: { tribal: 3, industrial: 3, spacefaring: 2 },
+    4: { industrial: 1, spacefaring: 3, empire: 2, ancient: 1 },
+    5: { spacefaring: 1, empire: 2, ancient: 3 },
+  },
+  // Reputation: every civilisation you eat makes the next ones more scared, hostile or
+  // likely to flee; every one you spare makes them hopeful.
+  terrifiedPerEat: 1.2, // mood weight added per civilisation eaten
+  hostilePerEat: 1.0,
+  hopefulPerSpare: 1.4,
+  fleeChancePerEat: 0.1, // chance a civilisation just runs away (max fleeChanceMax)
+  fleeChanceMax: 0.4,
+  fleeSpeed: 2.6, // own radii per second
+  eatPull: 2.2, // EAT: the planet is hauled in at this × your radius per second
+  // Hostile civilisations fire missiles at you.
+  missiles: { count: 4, every: 1.1, speed: 430, turn: 2.2, life: 4.5, massLoss: 0.025, knock: 260, size: 0.22 },
+  // What sparing one gives (see BOONS in src/data/civilisations.js).
+  boons: {
+    weights: { map: 3, neutron: 2, shield: 2, fuel: 3, stardust: 2, gravity: 2, escort: 1 },
+    fuel: 0.06, // + share of your mass
+    shieldHits: 2,
+    gravity: 0.15, // + × pull range for the rest of the run
+    escort: 40, // seconds rivals keep away
+    stardust: 60,
+    feastCount: 14, // star map: this many meals...
+    feastDistance: 1.4, // ...this × the view's half-diagonal away
+    neutronMass: 0.14, // hidden neutron star: eating it adds this share of your mass
+    pointerTime: 30, // seconds the scanner arrow points at a gift
+  },
+};
+
+// Galactic News ticker (headlines in src/data/news.js).
+export const NEWS = {
+  showTime: 6.5, // seconds per headline (long ones scroll)
+  scrollSpeed: 110, // design px/s for long headlines
+  fillerEvery: [28, 40], // seconds of quiet before a filler headline
+  maxQueue: 3,
+};
+
+// ---------------------------------------------------------------------------
+// Go viral: Daily Universe, share card, Milky Way challenge, Feed Your Hometown
+// ---------------------------------------------------------------------------
+
+// Daily Universe: the same seed for everyone on the same UTC day (no server needed).
+// One modifier per day, picked from the seed. Each modifier's fields are read where noted.
+export const DAILY = {
+  epoch: '2026-11-01', // Daily Universe #1
+  modifiers: [
+    { id: 'thickFog', name: 'Thick fog', desc: 'Cosmic Dawn is 40% fuller of gas', dawnCount: 1.4 },
+    { id: 'crowded', name: 'Crowded galaxy', desc: 'Twice as many rival black holes', rivalWeight: 2 },
+    { id: 'chatty', name: 'Chatty galaxy', desc: 'Civilisations call twice as often', civInterval: 0.5 },
+    { id: 'quasarSeason', name: 'Quasar season', desc: 'Igniting as a quasar is 30% easier', quasarIgnite: 0.7 },
+    { id: 'gifted', name: 'Gifted start', desc: 'Start with a random cosmic power', startPower: true },
+    { id: 'heavySeed', name: 'Heavy seed', desc: 'Start 30% heavier', startMass: 1.3 },
+    { id: 'restless', name: 'Restless cosmos', desc: 'Cosmic events come twice as often', eventInterval: 0.5 },
+    { id: 'longNight', name: 'Long night', desc: 'The Far Future lasts 50% longer', farFuture: 1.5 },
+  ],
+};
+
+// End-of-run share card (src/systems/share.js).
+export const SHARE = {
+  url: '', // link in the share text; '' = the page the game is on
+  eraEmoji: ['🌑', '⭐', '🌌', '💥', '🕯️'], // one per era reached
+  deathEmoji: '💀',
+  emptyEmoji: '⬛',
+  challengeSeconds: 600, // "under 10 minutes"
+};
+
+// "Eat the Milky Way in under 10 minutes": clear Cosmic Dawn → Quasar Era against the clock.
+export const CHALLENGE = {
+  seconds: 600,
+  boardSize: 10, // local best times kept (a global leaderboard needs a server: see SPEC "Later")
+};
+
+// Feed Your Hometown (Sandbox): pick a city or country, watch your black hole swallow it.
+export const HOMETOWN = {
+  maxResults: 8,
+  minChars: 2,
+  earthRadius: 520, // world px
+  globeTexture: 768, // px
+  approachTime: 3.2, // seconds for the black hole to reach the city
+  zoomIn: 1.9, // camera zoom on the city
+  biteTime: 2.2, // seconds of swallowing
+  biteRadius: 0.16, // hole left in the globe, × Earth's radius
+  nearestBlackHoleLy: 1560, // Gaia BH1, the nearest known black hole (light-years)
+};
+
+// ---------------------------------------------------------------------------
+// Cosmic events (src/systems/events.js): random 10–30 s situations in runs, and What if…?s
+// ---------------------------------------------------------------------------
+// Sizes are × your radius, speeds in your radii per second, shares are "eating it adds this
+// share of your mass". perEra lists which events can happen in each era.
+export const EVENTS = {
+  firstDelay: 22, // seconds into an era before the first event
+  interval: [38, 55], // seconds between events
+  perEra: {
+    1: ['darkMatter'],
+    2: ['supernova', 'darkMatter', 'wormhole'],
+    3: ['supernova', 'tidal', 'wanderer', 'wormhole', 'darkMatter'],
+    4: ['supernova', 'tidal', 'wanderer', 'wormhole', 'whiteHole', 'darkMatter'],
+    5: ['wanderer', 'whiteHole', 'darkMatter', 'tidal'],
+  },
+  supernova: {
+    starSize: 1.6, warn: 3, collapse: 0.45, linger: 8,
+    debris: 22, debrisSize: [0.3, 0.55], debrisSpeed: 3.2, debrisShare: 0.008,
+    neutronShare: 0.06, shockRadius: 13, push: 1100,
+  },
+  tidal: { starSize: 1.5, missBy: 3, speed: 2.2, tidalRange: 2.2, pieces: 16, inward: 2.4, linger: 6, maxTime: 14 },
+  wanderer: {
+    massRatio: 3, startDistance: 1.3, speed: 7, missBy: 5, life: 11, pullRange: 7, pull: 900, playerPull: 500,
+    trailEvery: 0.3, starSize: [0.35, 0.6], starShare: 0.012,
+  },
+  wormhole: { size: 1.5, life: 16, pull: 500, exitDistance: 3.5, feast: 22 },
+  whiteHole: {
+    size: 1.4, life: 15, every: 0.28, speed: 5, push: 700, pushRange: 5,
+    bigChance: 0.25, bigSize: [1.15, 1.5], smallSize: [0.3, 0.55], smallShare: 0.006,
+  },
+  darkMatter: { clumps: 9, size: [0.4, 0.7], spread: 7, share: 0.015, alpha: 0.35, lensAlpha: 0.9, life: 40 },
+  merger: { rings: 6, ringEvery: 0.12, chirpTime: 1.4 },
+};
+
+// ---------------------------------------------------------------------------
+// Cosmic Craft (Sandbox): collide two things, see what real physics makes
+// ---------------------------------------------------------------------------
+// Recipes and words: src/data/recipes.js. Positions are fractions of the 720×1280 canvas.
+export const CRAFT = {
+  slotY: 0.3, // where the two picks sit (× height)
+  itemRadius: 70, // design px
+  resultRadius: 120,
+  flyTime: 0.7, // seconds for the two to fly together
 };
 
 // ---------------------------------------------------------------------------
@@ -393,6 +603,21 @@ export const OBJECTS = {
     name: 'White dwarf', mass: 6000, radius: 240, behaviour: 'drift',
     drift: [0.03, 0.08], spin: [0, 0], color: 0xdfe8ff, texRadius: 56, glow: true,
   },
+  // A super-dense dead star, revealed by spared civilisations: small, but a huge meal (mass set when made).
+  neutronStar: {
+    name: 'Neutron star', mass: 1, radius: 10, behaviour: 'drift',
+    drift: [0.2, 0.4], spin: [4, 6], color: 0xcfe4ff, texRadius: 40, glow: true,
+  },
+  // Dark matter clump: invisible except as a faint ring of bent starlight (mass set when made).
+  darkMatter: {
+    name: 'Dark matter', mass: 1, radius: 10, behaviour: 'drift',
+    drift: [0.1, 0.3], spin: [0.2, 0.5], color: 0x9fc7ff, texRadius: 48,
+  },
+  // Chunks of something shattered by jets, the shredder or a cosmic event (size and mass set when made).
+  fragment: {
+    name: 'Fragment', mass: 1, radius: 10, behaviour: 'drift',
+    drift: [0.3, 0.8], spin: [1, 3], color: 0xffffff, texRadius: 32,
+  },
   rival: {
     name: 'Rival black hole', mass: 100000, radius: 0, behaviour: 'rival', // radius comes from its mass
     spin: [0, 0], color: COLORS.rivalRing, texRadius: 96,
@@ -422,6 +647,7 @@ export const SPAWNER = {
   startClear: 3.5, // × black hole radius kept empty at level start
   maxRivals: 4,
   maxDangerRings: 40,
+  maxTreasureRings: 16, // Gravitational Lens treasures
   dangerRingAlpha: 0.7,
   dangerRingWidth: 1.06, // ring drawn at this × the object's radius
 };

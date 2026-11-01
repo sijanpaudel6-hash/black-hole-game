@@ -193,6 +193,27 @@ class AudioEngine {
     this.tone('sine', freq, freq * 1.08, 0.08, peak);
   }
 
+  /** Gravitational-wave "chirp": a rising sweep that speeds up, like LIGO's merger sound. */
+  chirp() {
+    if (!this.ready || !this.sfxOn) return;
+    const t = this.ctx.currentTime;
+    for (let i = 0; i < 9; i++) {
+      const at = t + 1.2 * (1 - (1 - i / 9) ** 0.5);
+      const f = 90 * 1.32 ** i;
+      const o = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(f, at);
+      o.frequency.exponentialRampToValueAtTime(f * 1.35, at + 0.12);
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(0.12 + i * 0.012, at + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 0.16);
+      o.connect(g).connect(this.sfxBus);
+      o.start(at);
+      o.stop(at + 0.2);
+    }
+  }
+
   sparkle() {
     if (!this.ready || !this.sfxOn) return;
     this.tone('sine', 1800 + Math.random() * 600, 2600, 0.15, 0.06);

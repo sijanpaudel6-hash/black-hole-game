@@ -5,7 +5,8 @@
 import { mount, on } from './dom.js';
 import { ICONS } from './icons.js';
 import { kgHtml, formatTime, formatTimePrecise, ageHtml } from '../systems/format.js';
-import { LEVEL, OBJECTS, TIERS, RUN } from '../config.js';
+import { LEVEL, OBJECTS, TIERS, RUN, POWERS, CHALLENGE } from '../config.js';
+import { POWERS_BY_ID, SYNERGIES } from '../data/powers.js';
 import { recordingSupported } from '../systems/recorder.js';
 
 export default class Hud {
@@ -58,17 +59,26 @@ export default class Hud {
             </div>
             <div class="hud-right">
               ${mode === 'level' ? '<div class="panel hud-time"><div class="label">Time left</div><div class="value"></div></div>' : ''}
-              ${mode === 'run' ? '<div class="panel hud-time hud-age"><div class="label">Cosmic age</div><div class="value"></div></div>' : ''}
+              ${mode === 'run' ? `<div class="panel hud-time hud-age"><div class="label">${o.challenge ? 'Milky Way' : 'Cosmic age'}</div><div class="value"></div></div>` : ''}
               ${canRecord ? `<button class="hud-btn chamfer rec" data-act="record" aria-label="Record clip">${ICONS.record}</button>` : ''}
             </div>
           </div>
           ${tray}
           <div class="hud-bottom">
-            ${tierPanel}
+            <div class="hud-left">
+              ${mode === 'run' ? '<div class="hud-powers"></div>' : ''}
+              ${tierPanel}
+            </div>
             <div class="hud-buttons">
+              ${mode === 'run' ? `<button class="hud-btn chamfer jets-btn" data-act="jets" aria-label="Fire jets" style="display:none">${ICONS.jets}<span class="jets-label">Jets</span><b class="cd"></b></button>` : ''}
               <button class="hud-btn chamfer" data-act="pause" aria-label="Pause">${ICONS.pause}</button>
             </div>
           </div>
+        </div>
+        <div class="civ-choice" style="display:none">
+          <button class="civ-btn eat" data-civ="eat"><b>Eat</b><span class="civ-sub eat-sub"></span></button>
+          <button class="civ-btn spare" data-civ="spare"><b>Spare</b><span class="civ-sub spare-sub"></span></button>
+          <div class="civ-timer"><i></i></div>
         </div>
         <div class="rec-indicator" style="display:none"><i class="dot"></i><b>REC</b><span class="rec-time">00:00.00</span><button class="stop" data-act="stop">Save clip</button></div>
       </div>`,
@@ -84,11 +94,16 @@ export default class Hud {
     this.ageEl = this.node.querySelector('.hud-age .value');
     this.eraWarn = this.node.querySelector('.era-warn');
     this.eraQuasar = this.node.querySelector('.era-quasar');
+    this.powersEl = this.node.querySelector('.hud-powers');
+    this.jetsBtn = this.node.querySelector('.jets-btn');
+    this.jetsCd = this.node.querySelector('.jets-btn .cd');
     this.last = {};
 
     const h = o.handlers;
     on(this.node, {
       '[data-act=pause]': () => h.onPause(),
+      '[data-act=jets]': () => h.onJets?.(),
+      '[data-civ]': (_e, b) => h.onCiv?.(b.dataset.civ === 'eat'),
       '[data-act=record]': () => h.onRecord(),
       '[data-act=stop]': () => h.onStopRecord(),
       '[data-spawn]': (_e, b) => h.onSpawn(b.dataset.spawn),
@@ -130,11 +145,57 @@ export default class Hud {
     this.last.pct = undefined;
   }
 
-  /** Run mode per frame: cosmic age, evaporation warning, quasar meter. */
-  updateRun({ age, evaporating, quasar }) {
-    this.set('age', ageHtml(age), (v) => (this.ageEl.innerHTML = v));
+  /** Run mode: owned powers (icon + level pips) and active synergies. */
+  setPowers(owned, synergies = []) {
+    if (!this.powersEl) return;
+    const syn = SYNERGIES.filter((x) => synergies.includes(x.id));
+    this.powersEl.innerHTML =
+      owned.map((p) => `<span class="pw" title="${POWERS_BY_ID[p.id].name}">${ICONS[p.id]}<span class="pips">${'<i class="on"></i>'.repeat(p.level)}${'<i></i>'.repeat(POWERS.maxLevel - p.level)}</span></span>`).join('') +
+      syn.map((x) => `<span class="pw syn" title="${x.name}">${ICONS[x.id]}</span>`).join('');
+  }
+
+  /** Run mode per frame: cosmic age, evaporation warning, quasar meter, jets charge. */
+  updateRun({ age, evaporating, quasar, jets, clock }) {
+    if (this.jetsBtn) {
+      this.set('jetsOn', !!jets, (v) => (this.jetsBtn.style.display = v ? '' : 'none'));
+      if (jets) {
+        this.set('jetsCd', Math.round(jets.charge * 100), (v) => {
+          this.jetsCd.style.height = `${v}%`;
+          this.jetsBtn.classList.toggle('ready', v === 0);
+        });
+        this.set('jetsAuto', jets.auto, (v) => this.jetsBtn.classList.toggle('auto', v));
+      }
+    }
+    if (clock !== undefined) {
+      // Milky Way challenge: a stopwatch against the 10-minute target.
+      this.set('age', formatTime(clock), (v) => (this.ageEl.textContent = v));
+      this.set('late', clock > CHALLENGE.seconds, (v) => this.ageEl.parentElement.classList.toggle('warn', v));
+    } else this.set('age', ageHtml(age), (v) => (this.ageEl.innerHTML = v));
     this.set('evap', evaporating, (v) => (this.eraWarn.style.display = v ? '' : 'none'));
     if (quasar !== undefined) this.set('quasar', Math.round(quasar * 100), (v) => (this.eraQuasar.querySelector('b').style.width = `${v}%`));
+  }
+
+  /**
+   * EAT / SPARE buttons under the civilisation's message card.
+   * @param {{top:number, eat:string, spare:string, time:number}} o top in UI px
+   */
+  showCivChoice(o) {
+    const el = this.node.querySelector('.civ-choice');
+    el.style.top = `${o.top}px`;
+    el.querySelector('.eat-sub').textContent = o.eat;
+    el.querySelector('.spare-sub').textContent = o.spare;
+    const bar = el.querySelector('.civ-timer i');
+    bar.style.transition = 'none';
+    bar.style.width = '100%';
+    el.style.display = '';
+    requestAnimationFrame(() => {
+      bar.style.transition = `width ${o.time}s linear`;
+      bar.style.width = '0%';
+    });
+  }
+
+  hideCivChoice() {
+    this.node.querySelector('.civ-choice').style.display = 'none';
   }
 
   flashMass() {

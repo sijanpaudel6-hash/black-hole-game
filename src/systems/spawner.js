@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { DANGER, DEPTH, EATING, FEEDING, GROWTH, OBJECTS, RIVAL, SPAWNER, COLORS, BOSS } from '../config.js';
+import { DANGER, DEPTH, EATING, FEEDING, GROWTH, OBJECTS, RIVAL, SPAWNER, COLORS, BOSS, POWERS } from '../config.js';
 import SpaceObject from '../objects/SpaceObject.js';
 import { RIVAL_NAMES } from '../data/rivals.js';
 
@@ -29,12 +29,20 @@ export default class Spawner {
     this.worldRadius = opts.worldRadius;
     this.startMass = opts.startMass;
     this.cb = opts.callbacks;
+    this.rng = opts.rng ?? Math.random; // which types spawn (seeded in a Daily Universe)
     this.objects = [];
     for (let i = 0; i < SPAWNER.count + SPAWNER.reserve; i++) this.objects.push(new SpaceObject(scene));
     this.rings = [];
     for (let i = 0; i < SPAWNER.maxDangerRings; i++) {
       this.rings.push(scene.add.image(0, 0, 'ring').setVisible(false).setDepth(DEPTH.dangerRings).setTint(COLORS.danger).setAlpha(SPAWNER.dangerRingAlpha));
     }
+    // Blue rings around Gravitational Lens treasures.
+    this.treasureRings = [];
+    for (let i = 0; i < SPAWNER.maxTreasureRings; i++) {
+      this.treasureRings.push(scene.add.image(0, 0, 'ring').setVisible(false).setDepth(DEPTH.dangerRings).setTint(COLORS.science));
+    }
+    this.hiddenChance = 0; // share of new objects that are Lens treasures (set by powers)
+    this.nearestGap = Infinity; // gap to the nearest dangerous object, in black hole radii
     this.setWeights(opts.weights);
     this.rivalCount = 0;
     this.rootTarget = SPAWNER.count; // how many free-floating objects to keep (eras can change it)
@@ -55,7 +63,7 @@ export default class Spawner {
 
   pickType() {
     for (let attempt = 0; attempt < 6; attempt++) {
-      let roll = Math.random() * this.totalWeight;
+      let roll = this.rng() * this.totalWeight;
       let type = this.types[this.types.length - 1];
       for (let i = 0; i < this.types.length; i++) {
         roll -= this.weightList[i];
@@ -70,8 +78,29 @@ export default class Spawner {
     return this.types.find((t) => t !== 'rival') ?? this.types[0];
   }
 
-  take() {
-    return this.objects.find((o) => !o.inUse) ?? null;
+  /** A free pooled object; with `steal`, reuse a far-off one if the pool is full. */
+  take(steal = true) {
+    return this.objects.find((o) => !o.inUse) ?? (steal ? this.steal() : null);
+  }
+
+  /**
+   * Pool full (busy eras): reuse the farthest plain root object that's off-screen, so
+   * events, civilisations and shattering always get the objects they need.
+   */
+  steal() {
+    const v = this.view();
+    let best = null;
+    let bestD = -1;
+    for (const o of this.objects) {
+      if (!o.inUse || o.role !== 'root' || o.visible || o.type === 'rival' || o.civ || o.wanderer) continue;
+      const d = Math.hypot(o.x - v.cx, o.y - v.cy);
+      if (d > bestD) {
+        bestD = d;
+        best = o;
+      }
+    }
+    if (best) best.release();
+    return best;
   }
 
   // The camera's visible area in world space. Computed from scroll and zoom directly:
@@ -125,11 +154,13 @@ export default class Spawner {
     if (type === 'rival') {
       this.rivalCount++;
       obj.rivalName = Phaser.Utils.Array.GetRandom(RIVAL_NAMES);
+    } else if (this.hiddenChance > 0 && Math.random() < this.hiddenChance) {
+      obj.hidden = true;
     }
     for (const spec of OBJECTS[type].children ?? []) {
       const n = Phaser.Math.Between(spec.count[0], spec.count[1]);
       for (let i = 0; i < n; i++) {
-        const child = this.take();
+        const child = this.take(false); // moons are optional: never evict for them
         if (!child) return;
         child.reset(spec.type, x, y, { role: 'extra', parent: obj, orbitRadius: spec.orbitRadius, orbitPeriod: spec.orbitPeriod });
       }
@@ -190,6 +221,7 @@ export default class Spawner {
     for (const o of this.objects) if (o.inUse) o.release();
     this.rivalCount = 0;
     this.rings.forEach((r) => r.setVisible(false));
+    this.treasureRings.forEach((r) => r.setVisible(false));
   }
 
   /** Sandbox: spawn an object near the black hole. */
@@ -253,6 +285,60 @@ export default class Spawner {
     }
   }
 
+  /**
+   * Break an object into edible chunks (jets, Tidal Shredder, cosmic events).
+   * The object itself becomes the first chunk; the rest come from the pool.
+   * @param {object} obj
+   * @param {{x:number,y:number,radius:number}} bh the player (chunks are sized to be edible)
+   * @param {{inward?:number, pieces?:number, speed?:number}} [opts] inward: fling toward the player instead of outward
+   */
+  shatter(obj, bh, opts = {}) {
+    if (!obj.inUse || obj.role === 'persistent' || obj.type === 'rival') return;
+    const F = POWERS.fragments;
+    const n = opts.pieces ?? Phaser.Math.Between(F.pieces[0], F.pieces[1]);
+    const x = obj.x;
+    const y = obj.y;
+    const R = obj.radius;
+    const mass = (obj.mass * F.keep) / n;
+    const radius = Math.min(R * 0.5, bh.radius * F.maxRadius);
+    const tint = obj.isTinted ? obj.tintTopLeft : obj.def.color;
+    const name = `${obj.displayName ?? obj.def.name} chunk`;
+    const debris = obj.def.debris ?? [obj.def.color, COLORS.amber];
+    const role = obj.role;
+    const wasHidden = obj.hidden;
+    this.cb.onShatter?.({ x, y, radius: R, color: obj.def.color, debris, name: obj.displayName ?? obj.def.name });
+    const speed = (opts.speed ?? F.speed) * radius;
+    for (let i = 0; i < n; i++) {
+      const piece = i === 0 ? obj : this.take();
+      if (!piece) break;
+      const a = (i / n) * TAU + Math.random() * 0.6;
+      const off = R * 0.4;
+      if (i === 0 && obj.type === 'rival') this.rivalCount--;
+      piece.reset('fragment', x + Math.cos(a) * off, y + Math.sin(a) * off, {
+        role: i === 0 ? role : 'extra',
+        mass,
+        radius: radius * Phaser.Math.FloatBetween(0.8, 1.1),
+        displayName: name,
+      });
+      piece.setTint(tint);
+      piece.hidden = i === 0 && wasHidden;
+      if (opts.inward) {
+        // Swirl toward the player (Accretion Buzzsaw).
+        const dx = bh.x - piece.x;
+        const dy = bh.y - piece.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const v = opts.inward * radius;
+        piece.vx = (dx / d) * v - (dy / d) * v * 0.6;
+        piece.vy = (dy / d) * v + (dx / d) * v * 0.6;
+      } else {
+        piece.vx = Math.cos(a) * speed * Phaser.Math.FloatBetween(0.7, 1.3);
+        piece.vy = Math.sin(a) * speed * Phaser.Math.FloatBetween(0.7, 1.3);
+      }
+      piece.driftX = piece.vx * 0.1;
+      piece.driftY = piece.vy * 0.1;
+    }
+  }
+
   // ---- Per-frame update ----
 
   /**
@@ -262,6 +348,10 @@ export default class Spawner {
    * @param {boolean} ctx.feeding sitting inside bigger objects eats them
    * @param {number} ctx.pullRange × black hole radius
    * @param {object|null} ctx.boss boss black hole (pulls and eats objects)
+   * @param {number} [ctx.swirl] Kerr Spin: tangential pull, × the normal pull
+   * @param {number} [ctx.pullStrength] × pull acceleration
+   * @param {{ratio:number, range:number, inward:number}|null} [ctx.shred] Tidal Shredder rule
+   * @param {boolean} [ctx.rivalsFlee] rivals keep away (a spared civilisation's honour guard)
    */
   update(dt, time, ctx) {
     const { bh } = ctx;
@@ -274,7 +364,11 @@ export default class Spawner {
     const recycleDist = v.halfDiag * SPAWNER.recycleRadius;
     const scale = bh.radius / GROWTH.baseRadius;
     const pullRange = bh.radius * ctx.pullRange;
-    const pullAccel = EATING.pullAcceleration * scale;
+    const pullAccel = EATING.pullAcceleration * scale * (ctx.pullStrength ?? 1);
+    const swirl = ctx.swirl ?? 0;
+    const shred = ctx.shred ?? null;
+    let nearestGap = Infinity;
+    let treasureIndex = 0;
     const kPull = 1 - Math.exp(-EATING.pullDrag * dt);
     const kSettle = 1 - Math.exp(-EATING.releaseDrag * dt);
     const edibleLimit = bh.radius * EATING.edibleRatio;
@@ -319,7 +413,7 @@ export default class Spawner {
 
       // Pull zone
       obj.pulled = false;
-      if (edible && dist < pullRange) {
+      if (edible && dist < pullRange && !obj.spared) {
         obj.pulled = true;
         pulledCount++;
         if (obj.orbiting) obj.freeFromOrbit();
@@ -327,7 +421,12 @@ export default class Spawner {
         const a = pullAccel * closeness;
         obj.vx += (dx / dist) * a * dt;
         obj.vy += (dy / dist) * a * dt;
-        const k = kPull * closeness;
+        if (swirl) {
+          // Kerr Spin: a sideways pull, so things orbit in instead of falling straight.
+          obj.vx += (-dy / dist) * a * swirl * dt;
+          obj.vy += (dx / dist) * a * swirl * dt;
+        }
+        const k = kPull * closeness * (swirl ? 0.5 : 1);
         obj.vx += (bh.velocity.x - obj.vx) * k;
         obj.vy += (bh.velocity.y - obj.vy) * k;
       } else if (obj.behaviour !== 'rival') {
@@ -361,6 +460,11 @@ export default class Spawner {
       const ndx = bh.x - obj.x;
       const ndy = bh.y - obj.y;
       const nd = Math.hypot(ndx, ndy) || 0.0001;
+      if (obj.hidden && treasureIndex < this.treasureRings.length) {
+        const ring = this.treasureRings[treasureIndex++];
+        ring.setPosition(obj.x, obj.y).setScale((obj.radius * 1.3) / 124).setAlpha(0.45 + 0.35 * Math.sin(time * 5 + obj.phase)).setVisible(true);
+      }
+      if (edible && obj.spared) continue; // spared civilisations can't be eaten
       if (edible) {
         if (nd < bh.radius) {
           this.cb.onSwallow(obj);
@@ -375,7 +479,18 @@ export default class Spawner {
         continue;
       }
 
+      // Tidal Shredder: things a bit bigger than you crumble as you pass close.
+      if (shred && obj.behaviour !== 'rival' && obj.behaviour !== 'static' && obj.role !== 'persistent' && !obj.spared
+        && obj.radius < bh.radius * shred.ratio && nd < (bh.radius + obj.radius) * shred.range) {
+        this.shatter(obj, bh, { inward: shred.inward });
+        continue;
+      }
+
       const canEatPlayer = obj.behaviour === 'rival' && obj.radius * EATING.edibleRatio > bh.radius;
+      if ((obj.radius > bh.radius || canEatPlayer) && !obj.spared) {
+        const gap = (nd - bh.radius - obj.radius) / bh.radius;
+        if (gap < nearestGap) nearestGap = gap;
+      }
       if (ctx.feeding) {
         obj.feeding = nd < obj.radius;
         if (obj.feeding) {
@@ -400,6 +515,10 @@ export default class Spawner {
     for (let i = ringIndex; i < this.rings.length; i++) {
       if (this.rings[i].visible) this.rings[i].setVisible(false);
     }
+    for (let i = treasureIndex; i < this.treasureRings.length; i++) {
+      if (this.treasureRings[i].visible) this.treasureRings[i].setVisible(false);
+    }
+    this.nearestGap = nearestGap;
     if (this.pushers.length) this.applyStarPush(dt, scale);
     return pulledCount;
   }
@@ -429,6 +548,7 @@ export default class Spawner {
 
   updateRival(r, dt, ctx, scale) {
     const { bh } = ctx;
+    if (r.wanderer) r.think = 1; // a runaway black hole (cosmic event) just keeps going
     r.think -= dt;
     if (r.think <= 0) {
       r.think = RIVAL.thinkInterval * Phaser.Math.FloatBetween(0.8, 1.2);
@@ -437,10 +557,10 @@ export default class Spawner {
       const d = Math.hypot(dx, dy) || 1;
       const canEatPlayer = r.radius * EATING.edibleRatio > bh.radius;
       const playerCanEat = r.radius < bh.radius * EATING.edibleRatio;
-      if (canEatPlayer && ctx.danger && d < r.radius * RIVAL.chaseRange) {
+      if (canEatPlayer && ctx.danger && !ctx.rivalsFlee && d < r.radius * RIVAL.chaseRange) {
         r.targetX = bh.x;
         r.targetY = bh.y;
-      } else if (playerCanEat && d < r.radius * RIVAL.fleeRange) {
+      } else if ((playerCanEat || ctx.rivalsFlee) && d < r.radius * RIVAL.fleeRange * (ctx.rivalsFlee ? 2 : 1)) {
         r.targetX = r.x - (dx / d) * r.radius * 10;
         r.targetY = r.y - (dy / d) * r.radius * 10;
       } else {
@@ -476,7 +596,7 @@ export default class Spawner {
     const dv = Math.hypot(dvx, dvy) || 1;
     const maxChange = RIVAL.acceleration * scale * dt;
     const k = Math.min(1, maxChange / dv);
-    if (!r.pulled) {
+    if (!r.pulled && !r.wanderer) {
       r.vx += dvx * k;
       r.vy += dvy * k;
     }

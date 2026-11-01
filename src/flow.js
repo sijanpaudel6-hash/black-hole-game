@@ -31,9 +31,12 @@ export function goShop(data = {}) {
   switchTo('ShopScene', data);
 }
 
-/** The main mode: one life of a black hole, through five eras. */
-export function startRun() {
-  switchTo('GameScene', { mode: 'run' });
+/**
+ * The main mode: one life of a black hole, through five eras.
+ * @param {{daily?:boolean, challenge?:boolean}} [opts] Daily Universe (seeded by date) or the Milky Way challenge
+ */
+export function startRun(opts = {}) {
+  switchTo('GameScene', { mode: 'run', daily: !!opts.daily, challenge: !!opts.challenge });
 }
 
 /** Classic mode: one of the 15 fixed levels. */
@@ -45,8 +48,14 @@ export function startSandbox(tier) {
   switchTo('GameScene', { mode: 'sandbox', tier });
 }
 
-export function startScenario(scenario) {
-  switchTo('GameScene', { mode: 'scenario', scenario });
+/** Cosmic Craft lab (Sandbox). */
+export function startCraft() {
+  switchTo('CraftScene', {});
+}
+
+/** @param {object} [extra] scenario data (Feed Your Hometown: { place, land }) */
+export function startScenario(scenario, extra = {}) {
+  switchTo('GameScene', { mode: 'scenario', scenario, ...extra });
 }
 
 /** Tell running scenes the settings changed (Low graphics etc.). */

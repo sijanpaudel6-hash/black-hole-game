@@ -365,6 +365,11 @@ sup {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Long scrolling screens: items keep their size instead of squashing to fit. */
+.screen.scroll > * {
+  flex-shrink: 0;
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -1431,4 +1436,536 @@ sup {
 
 .best-run {
   margin-top: 10px;
+}
+
+/* ---------- Cosmic powers (runs) ---------- */
+
+.hud-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.hud-powers {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.hud-powers:empty {
+  display: none;
+}
+
+.hud-powers .pw {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 5px 5px 4px;
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  color: var(--text);
+}
+
+.hud-powers .pw .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.hud-powers .pw.syn {
+  color: var(--science);
+  border-color: var(--science);
+  align-content: center;
+}
+
+.pips {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.pips i {
+  width: 5px;
+  height: 3px;
+  background: var(--hairline);
+}
+
+.pips i.on {
+  background: var(--amber);
+}
+
+.jets-btn {
+  position: relative;
+  overflow: hidden;
+  color: var(--science);
+  height: 56px;
+  grid-template-rows: auto auto;
+  place-content: center;
+  gap: 1px;
+}
+
+.jets-btn .jets-label {
+  font-family: var(--head);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 12px;
+}
+
+.jets-btn .cd {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0;
+  background: rgba(7, 8, 12, 0.7);
+  pointer-events: none;
+}
+
+.jets-btn.ready {
+  border-color: var(--science);
+}
+
+.jets-btn.auto .jets-label::after {
+  content: ' · auto';
+}
+
+.power-pick {
+  justify-content: center;
+  gap: 0;
+}
+
+.pp-kicker {
+  text-align: center;
+}
+
+.pp-title {
+  text-align: center;
+  margin: 2px 0 14px;
+}
+
+.power-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.power-card {
+  display: flex;
+  gap: 12px;
+  text-align: left;
+  padding: 12px;
+  background: var(--panel-solid);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.power-card:active,
+.power-card.chosen {
+  border-color: var(--amber);
+  transform: scale(0.98);
+}
+
+.power-card.syn {
+  border-color: var(--science);
+}
+
+.pc-icon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--panel-raised);
+  color: var(--amber);
+}
+
+.pc-icon .icon {
+  width: 26px;
+  height: 26px;
+}
+
+.pc-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.pc-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.pc-name {
+  font-family: var(--head);
+  font-weight: 600;
+  font-size: 19px;
+  line-height: 22px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pc-desc {
+  margin: 4px 0 6px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text);
+}
+
+.pc-level {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pc-level .pips i {
+  width: 10px;
+}
+
+.pc-syn {
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--muted);
+}
+
+.pc-syn.now {
+  color: var(--science);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.pc-syn .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.pc-owned {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
+
+.pc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.pc-chip .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.end-powers {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ---------- Civilisations: EAT / SPARE ---------- */
+
+.civ-choice {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.ui-hud .civ-choice button {
+  pointer-events: auto;
+}
+
+.civ-btn {
+  display: grid;
+  gap: 2px;
+  padding: 10px 8px;
+  background: var(--panel-solid);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  text-align: center;
+}
+
+.civ-btn b {
+  font-family: var(--head);
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 22px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.civ-btn.eat {
+  border-color: var(--amber);
+}
+
+.civ-btn.eat b {
+  color: var(--amber);
+}
+
+.civ-btn.spare {
+  border-color: var(--science);
+}
+
+.civ-btn.spare b {
+  color: var(--science);
+}
+
+.civ-sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--muted);
+}
+
+.civ-timer {
+  grid-column: 1 / -1;
+  height: 3px;
+  background: var(--hairline);
+}
+
+.civ-timer i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--text);
+}
+
+/* ---------- Go viral: daily, challenge, share, hometown ---------- */
+
+.title-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mode-btn {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  text-align: left;
+  padding: 8px 10px;
+  height: auto;
+  min-height: 52px;
+}
+
+.mode-btn .icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: var(--science);
+}
+
+.mode-btn span {
+  display: grid;
+  min-width: 0;
+}
+
+.mode-btn b {
+  font-family: var(--head);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 17px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mode-btn small {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.share-row {
+  margin: 14px 0 4px;
+  display: grid;
+  gap: 4px;
+}
+
+.share-btn {
+  border-color: var(--science);
+  color: var(--science);
+}
+
+.share-links {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+.end-note {
+  text-align: center;
+  margin-top: 6px;
+}
+
+.challenge-board {
+  margin-top: 10px;
+}
+
+.place-input {
+  width: 100%;
+  margin: 16px 0 12px;
+  padding: 14px 12px;
+  background: var(--panel-solid);
+  border: 1px solid var(--amber);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 16px;
+  outline: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.place-input::placeholder {
+  color: var(--muted);
+}
+
+.hometown-note {
+  margin-top: 16px;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+.hometown-card .head .icon {
+  width: 16px;
+  height: 16px;
+  vertical-align: -2px;
+  color: var(--science);
+}
+
+/* ---------- Cosmic Craft ---------- */
+
+.craft-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.craft-picks {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 252px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.craft-picks .label {
+  width: 45%;
+  text-align: center;
+}
+
+.craft-result {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 266px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+}
+
+.craft-result.new {
+  border-color: var(--science);
+}
+
+.craft-result .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.craft-result .headline {
+  margin: 8px 0 2px;
+}
+
+.craft-result p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.craft-tray-wrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 37%;
+  padding: 8px 16px 12px;
+  background: rgba(7, 8, 12, 0.92);
+  border-top: 1px solid var(--hairline);
+  display: flex;
+  flex-direction: column;
+}
+
+.craft-tray-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.craft-tray {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  align-content: start;
+  touch-action: pan-y;
+}
+
+.craft-item {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  background: var(--panel-solid);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+}
+
+.craft-item:active {
+  border-color: var(--amber);
+}
+
+.craft-item img {
+  width: 36px;
+  height: 36px;
+}
+
+.craft-item span {
+  font-size: 11px;
+  line-height: 13px;
+  text-align: center;
 }

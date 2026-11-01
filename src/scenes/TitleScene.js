@@ -9,6 +9,7 @@ import { audio } from '../systems/audio.js';
 import { formatInt } from '../systems/format.js';
 import { toast, clear } from '../ui/dom.js';
 import { renderTitle, renderLevelSelect, renderSettings, renderLibrary, renderSandboxMenu } from '../ui/menus.js';
+import { renderHometownPicker } from '../ui/hometown.js';
 
 let idleChecked = false;
 
@@ -57,6 +58,7 @@ export default class TitleScene extends Phaser.Scene {
     else if (view === 'settings') renderSettings(data);
     else if (view === 'library') renderLibrary(data);
     else if (view === 'sandbox') renderSandboxMenu(data);
+    else if (view === 'hometown') renderHometownPicker(data);
     else renderTitle();
   }
 

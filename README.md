@@ -20,7 +20,19 @@ npm run build    # static build in dist/
   Cosmic Dawn (Hawking evaporation: eat or shrink away) → First Stars → Galaxy Era
   (named rival black holes) → Quasar Era (feed fast to ignite as a quasar) → Far Future
   (food runs out; the run ends with your black hole as the last light, evaporating).
-  Era changes use the tier-up moment. Tunables: `RUN`, `QUASAR`, `FINALE` in `src/config.js`.
+  Era changes use the tier-up moment. A run takes about 6–10 minutes.
+  Tunables: `RUN`, `QUASAR`, `FINALE` in `src/config.js`.
+- **Cosmic powers:** at every era change, pick 1 of 3 (Kerr Spin, Relativistic Jets,
+  Tidal Shredder, Dark Matter Halo, Gravitational Lens, Hawking Bloom), 3 levels each, with
+  three synergies (Pulsar Lighthouse, Accretion Buzzsaw, Lensed Jets). `POWERS`.
+- **The Universe Talks Back:** from the Galaxy Era, civilisations hail you (313 hand-written
+  messages); EAT or SPARE them, with boons and consequences, and a Galactic News ticker.
+  `CIVS`, `NEWS`, `src/data/civilisations.js`, `src/data/news.js`.
+- **Cosmic events:** supernova, tidal disruption, runaway black hole, wormhole (theoretical),
+  white hole (hypothetical), dark matter and the merger chirp. `EVENTS`.
+- **Daily Universe:** the same seeded universe for everyone each UTC day, with a daily
+  modifier. **Share card:** text (emoji strip) and a 9:16 image, via the phone's share menu.
+  **Milky Way challenge:** clear the Quasar Era in under 10 minutes. `DAILY`, `SHARE`, `CHALLENGE`.
 - **Classic levels:** 15 levels in 5 tiers (Dust Eater → Rock Crusher → World Devourer →
   Star Swallower → Galaxy Eater), a 3-minute timer, and a target mass. Things bigger
   than you have a red ring: touching one bounces you off and costs 10% of your mass.
@@ -32,8 +44,11 @@ npm run build    # static build in dist/
 - **Sandbox** (after Classic level 3 or reaching First Stars in a run): no timer, no danger, spawn any unlocked object, and sit
   inside big things to eat them from the inside.
 - **"What if…?" scenarios:** Black hole vs Earth, vs the Sun, Eat the Solar System, Two
-  black holes collide, Tiny vs supermassive. Each is a ready-made 15–30 s clip that ends
-  with a real fact.
+  black holes collide, Tiny vs supermassive, plus the six cosmic events. Each is a
+  ready-made 15–30 s clip that ends with a real fact.
+- **Feed Your Hometown** (Sandbox): pick a city or country (Natural Earth, public domain)
+  and watch your black hole eat it, ending with "Comment your city · I'll feed it next".
+- **Cosmic Craft** (Sandbox): collide two things; 44 real-science recipes, 41 things to discover.
 - **Clip recorder:** the red ● button records the canvas (with sound) and saves about
   the last 20 s as a 9:16 WebM. While recording, the HUD switches to a clean overlay
   (big mass counter + watermark inside YouTube's safe area). Scenarios can auto-record.
@@ -57,6 +72,8 @@ length is `EATING.massGain`.
 
 - `?unlockall`: open every level, sandbox and science card (not saved).
 - `?reset`: wipe the save.
+- Dev server only (`npm run dev`): `?bot` lets an autopilot play runs, `?era=3` starts a
+  run at era 3, `?powers=jets,lens` grants powers.
 
 ## Project layout
 
@@ -65,9 +82,11 @@ src/
 ├── main.js            Phaser setup, fonts, start-up
 ├── config.js          every tunable number
 ├── flow.js            moving between screens and scenes
-├── scenes/            TitleScene (menus), GameScene, ShopScene, UIScene (in-canvas overlay)
+├── scenes/            TitleScene (menus), GameScene, ShopScene, UIScene (in-canvas overlay), CraftScene
 ├── objects/           BlackHole, SpaceObject
-├── systems/           spawner, effects, textures, audio, recorder, scenarios, save, economy, ads, format, starfield
-├── data/              levels, scienceCards, scenarios
-└── ui/                HTML menus and HUD (dom, menus, hud, overlays, shop, scienceCard, icons, styles.css)
+├── systems/           run, powers, civs, news, events, craft, daily, share, leaderboard, globe, spawner,
+│                      effects, textures, audio, recorder, scenarios, save, economy, ads, format, starfield
+├── data/              levels, scienceCards, scenarios, rivals, powers, civilisations, news, recipes,
+│                      places + land (Natural Earth)
+└── ui/                HTML menus and HUD (dom, menus, hud, overlays, powerPick, hometown, craft, shop, …)
 ```

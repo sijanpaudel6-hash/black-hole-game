@@ -8,6 +8,9 @@ import { SCIENCE_CARDS } from '../data/scienceCards.js';
 import { SCENARIOS } from '../data/scenarios.js';
 import { TIERS, RUN, SANDBOX_UNLOCK_LEVEL, SANDBOX_UNLOCK_ERA } from '../config.js';
 import { massToKg, kgHtml, formatInt, formatTime } from '../systems/format.js';
+import { universeNumber, dailyModifier, dailyRecord } from '../systems/daily.js';
+import { bestTimes } from '../systems/leaderboard.js';
+import { craftProgress } from '../systems/craft.js';
 import { effects } from '../systems/economy.js';
 import { showScienceCard } from './scienceCard.js';
 import { audio } from '../systems/audio.js';
@@ -39,6 +42,8 @@ export function renderTitle() {
   const unlocked = sandboxUnlocked();
   const save = getSave();
   const best = save.bestEra ? RUN.eras[save.bestEra - 1] : null;
+  const daily = dailyRecord();
+  const times = bestTimes();
   const node = mount(
     'screen',
     `<div class="screen title-screen fade-in">
@@ -56,6 +61,10 @@ export function renderTitle() {
       <div class="title-name">Black Hole<span class="sub">Event Horizon</span></div>
       <div class="title-actions">
         <button class="btn-primary" data-act="play">Play ${ICONS.play}</button>
+        <div class="title-modes">
+          <button class="btn-secondary mode-btn" data-act="daily">${ICONS.calendar}<span><b>Daily Universe #${universeNumber()}</b><small>${daily.attempts ? `Played · best era ${daily.best?.era ?? '–'}` : dailyModifier().name}</small></span></button>
+          <button class="btn-secondary mode-btn" data-act="challenge">${ICONS.timer}<span><b>Milky Way challenge</b><small>${times.length ? `Best ${formatTime(times[0].seconds)}` : 'Beat 10:00'}</small></span></button>
+        </div>
         <div class="label best-run">${best ? `Best run · Era ${best.id} ${best.name}${save.runsCompleted ? ` · ${save.runsCompleted}× the last light` : ''}` : 'One life · five eras · from the dawn of time to its end'}</div>
         <div class="title-links">
           <button class="btn-text" data-act="classic">[ Classic ]</button>
@@ -72,6 +81,8 @@ export function renderTitle() {
   );
   on(node, {
     '[data-act=play]': () => flow.startRun(),
+    '[data-act=daily]': () => flow.startRun({ daily: true }),
+    '[data-act=challenge]': () => flow.startRun({ challenge: true }),
     '[data-act=classic]': () => flow.goMenu('levels'),
     '[data-act=shop]': () => flow.goShop({ from: 'title' }),
     '[data-act=sandbox]': () => (unlocked ? flow.goMenu('sandbox') : toast(`Reach ${RUN.eras[SANDBOX_UNLOCK_ERA - 1].name} in a run to unlock Sandbox`)),
@@ -289,7 +300,11 @@ export function renderSandboxMenu() {
       <div class="tier-chips">${chips}</div>
       <button class="btn-primary" data-act="free">Free play ${ICONS.play}</button>
       <div class="section-label label">What if…? · clip-sized scenes</div>
-      <div class="stack">${scenarios}</div>
+      <div class="stack">
+        <button class="scenario hometown-card craft-card" data-act="craft"><div><div class="head">${ICONS.craft} Cosmic Craft</div><div class="desc">Collide two things and see what real physics makes · found ${craftProgress().found} / ${craftProgress().total}</div></div><span class="go">Play ${ICONS.arrow}</span></button>
+        <button class="scenario hometown-card" data-act="hometown"><div><div class="head">${ICONS.globe} Feed your hometown</div><div class="desc">Pick a city or country. Watch it get swallowed.</div></div><span class="go">Play ${ICONS.arrow}</span></button>
+        ${scenarios}
+      </div>
       <div class="panel" style="margin-top:16px">
         <button class="setting-row" data-setting="autoRecord"><div><div class="head">Auto-record scenarios</div><div class="label">Saves a 9:16 clip when the scene ends</div></div><span class="toggle ${s.autoRecord ? 'on' : ''}"></span></button>
       </div>
@@ -304,6 +319,8 @@ export function renderSandboxMenu() {
       refresh();
     },
     '[data-act=free]': () => flow.startSandbox(tier),
+    '[data-act=hometown]': () => flow.goMenu('hometown'),
+    '[data-act=craft]': () => flow.startCraft(),
     '[data-scenario]': (_e, b) => flow.startScenario(b.dataset.scenario),
     '[data-setting]': (_e, b) => toggleSetting(b.dataset.setting, b),
   });
