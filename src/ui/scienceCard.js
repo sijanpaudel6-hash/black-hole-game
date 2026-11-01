@@ -67,7 +67,7 @@ export function showScienceCard(id, onClose) {
     return;
   }
   audio.chime();
-  const node = el(`<div class="modal-backdrop fade-in" style="z-index:5">
+  const node = el(`<div class="modal-backdrop solid fade-in" style="z-index:5;justify-content:center">
     <div class="science-card">
       <div class="top"><span class="kicker"><i class="dot"></i>Science log · ${String(c.id).padStart(2, '0')}</span><button class="label science" data-act="close">[ × ]</button></div>
       <h2>${c.title}</h2>

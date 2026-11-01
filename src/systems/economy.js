@@ -42,6 +42,8 @@ export const effects = {
   timeLimit: () => LEVEL.timeLimit + UPGRADES.timeDilation.perLevel * upgradeLevel('timeDilation'),
   massLoss: () => Math.max(0, DANGER.massLoss - UPGRADES.hawkingShield.perLevel * upgradeLevel('hawkingShield')),
   idlePerHour: () => UPGRADES.darkMatterDrip.perLevel * upgradeLevel('darkMatterDrip'),
+  // Runs have no timer, so Time Dilation slows Hawking evaporation instead.
+  evaporationMultiplier: () => Math.max(0.1, 1 - UPGRADES.timeDilation.evaporationPerLevel * upgradeLevel('timeDilation')),
   maxSpeed: () => MOVEMENT.maxSpeed * (1 + UPGRADES.thrusters.perLevel * upgradeLevel('thrusters')),
 };
 
@@ -55,6 +57,21 @@ export function levelStardust(massEaten, bonusMass, startMass, won) {
   let amount = Math.floor((ECONOMY.stardustPerStartMass * (massEaten + bonusMass)) / startMass);
   if (!won) amount = Math.floor(amount * ECONOMY.failKeep);
   const daily = won && getSave().lastDailyWin !== todayKey();
+  return { base: amount, daily, total: daily ? amount * ECONOMY.dailyWinMultiplier : amount };
+}
+
+/**
+ * Stardust for one era of a run: same rule as levels, measured against the era's
+ * starting mass (so every era is worth about the same).
+ */
+export function eraStardust(massEaten, bonusMass, eraStartMass) {
+  return Math.floor((ECONOMY.stardustPerStartMass * (massEaten + bonusMass)) / eraStartMass);
+}
+
+/** Total for a finished run. Runs always end, so nothing is halved; completing gives a bonus. */
+export function runStardust(eraTotal, completed, completeBonus) {
+  const amount = Math.floor(eraTotal * (completed ? completeBonus : 1));
+  const daily = amount > 0 && getSave().lastDailyWin !== todayKey();
   return { base: amount, daily, total: daily ? amount * ECONOMY.dailyWinMultiplier : amount };
 }
 

@@ -206,7 +206,83 @@ export const LEVELS = [
   { tier: 5, target: 500000, boss: true },
 ];
 
-export const SANDBOX_UNLOCK_LEVEL = 3; // sandbox opens after clearing this level
+export const SANDBOX_UNLOCK_LEVEL = 3; // sandbox opens after clearing this Classic level...
+export const SANDBOX_UNLOCK_ERA = 2; // ...or after reaching this era in a run
+
+// ---------------------------------------------------------------------------
+// Run mode: "One Life of a Black Hole" (the main mode)
+// ---------------------------------------------------------------------------
+// One run takes the black hole through five eras. Each era has a mass goal (the next era's
+// starting mass); reaching it triggers the tier-up moment and the next era. No timer:
+// in Cosmic Dawn the black hole evaporates (Hawking radiation) unless it keeps eating.
+// The Far Future has no goal: food runs out and the run ends with the black hole as the
+// last light, evaporating.
+//
+// evaporation: mass lost per second = rate × eraStartMass × (eraStartMass ÷ mass)^exponent
+// (small black holes evaporate faster, like real Hawking radiation). canKill: whether it can
+// evaporate you completely (mass below RUN.deathFactor × the run's starting mass).
+// age: [start, end] cosmic age in years shown on the HUD (log-interpolated by progress).
+// stars: starfield brightness [at era start, at era end]. countScale: × SPAWNER.count objects.
+export const RUN = {
+  deathFactor: 0.5,
+  completeBonus: 1.5, // Stardust × this when you reach the end of the Far Future
+  eraEndDelay: 1.6, // seconds of tier-up slow motion before the new era's objects take over
+  eras: [
+    {
+      id: 1, name: 'Cosmic Dawn', startMass: 20, goal: 100,
+      blurb: 'A primordial black hole in a fog of gas. Eat, or evaporate.',
+      weights: { gasWisp: 35, dust: 20, iceCrystal: 15, gasCloud: 25, protostar: 5 },
+      background: 0x0e0b1a, stars: [0.15, 0.3], age: [5e7, 2e8],
+      evaporation: { rate: 0.008, exponent: 2, canKill: true },
+    },
+    {
+      id: 2, name: 'First Stars', startMass: 100, goal: 1000,
+      blurb: 'Giant early stars light up the dark.',
+      weights: { gasWisp: 15, gasCloud: 25, protostar: 30, youngStar: 13, blueStar: 12, blueGiant: 5 },
+      background: 0x080a17, stars: [0.45, 0.8], age: [2e8, 1e9],
+    },
+    {
+      id: 3, name: 'Galaxy Era', startMass: 1000, goal: 10000,
+      blurb: 'Rival black holes compete for the same food. Outgrow them or flee.',
+      weights: { youngStar: 10, blueStar: 15, blueGiant: 20, moon: 15, comet: 10, dwarfPlanet: 10, rockyPlanet: 10, gasGiant: 5, rival: 10 },
+      background: 0x07080c, stars: [0.9, 1], age: [1e9, 3e9],
+    },
+    {
+      id: 4, name: 'Quasar Era', startMass: 10000, goal: 100000, countScale: 1.4, quasar: true,
+      blurb: 'Food is everywhere. Feed fast enough to ignite as a quasar.',
+      weights: { moon: 15, dwarfPlanet: 10, rockyPlanet: 20, gasGiant: 25, redDwarf: 15, sunLikeStar: 10, giantStar: 5 },
+      background: 0x0e0a08, stars: [1, 1], age: [3e9, 1.38e10],
+    },
+    {
+      id: 5, name: 'Far Future', startMass: 100000, goal: null, duration: 75,
+      blurb: 'The stars are dying. Eat what is left.',
+      weights: { whiteDwarf: 30, redDwarf: 30, gasGiant: 15, giantStar: 10, rival: 8, clusterStar: 7 },
+      background: 0x030304, stars: [0.6, 0], age: [1e14, 1e100],
+      evaporation: { rate: 0.003, exponent: 1, canKill: false },
+    },
+  ],
+};
+
+// Quasar Era: gain this fraction of your mass within `window` seconds to ignite as a quasar.
+export const QUASAR = {
+  window: 4,
+  igniteGain: 0.12,
+  duration: 8, // seconds ignited
+  pullBoost: 1.8, // × pull range while ignited
+  cooldown: 6,
+  jetLength: 9, // × black hole radius
+  jetWidth: 0.55,
+};
+
+// The end of the Far Future: everything fades and the black hole evaporates into the dark.
+export const FINALE = {
+  fadeObjects: 2.5,
+  evaporateTime: 8, // seconds to evaporate completely
+  zoomOut: 0.45,
+  sparkEvery: 0.18, // seconds between little flashes of Hawking radiation
+  factTime: 4.5,
+  fact: 'When the last black holes evaporate, around 10¹⁰⁰ years from now, the universe goes dark.',
+};
 
 // ---------------------------------------------------------------------------
 // Objects
@@ -288,6 +364,35 @@ export const OBJECTS = {
     name: 'Cluster star', mass: 10000, radius: 200, behaviour: 'drift',
     drift: [0.05, 0.12], spin: [0, 0], color: 0xd8e6ff, texRadius: 64, glow: true,
   },
+  // Run-mode era objects (sizes sit in the same slots as the tier objects above).
+  gasWisp: {
+    name: 'Gas wisp', mass: 2, radius: 12, behaviour: 'drift',
+    drift: [0.5, 1.6], spin: [0.1, 0.3], color: 0x9aa4ff, texRadius: 24, gas: true,
+  },
+  gasCloud: {
+    name: 'Gas cloud', mass: 10, radius: 36, behaviour: 'drift',
+    drift: [0.12, 0.35], spin: [0.05, 0.15], color: 0x8a76e0, texRadius: 56, gas: true,
+  },
+  protostar: {
+    name: 'Protostar', mass: 30, radius: 41, behaviour: 'drift',
+    drift: [0.3, 0.7], spin: [0, 0], color: 0xffab66, texRadius: 40, glow: true,
+  },
+  youngStar: {
+    name: 'Young star', mass: 60, radius: 52, behaviour: 'drift',
+    drift: [0.2, 0.5], spin: [0, 0], color: 0xfff0c8, texRadius: 40, glow: true,
+  },
+  blueStar: {
+    name: 'Blue star', mass: 90, radius: 59, behaviour: 'drift',
+    drift: [0.15, 0.4], spin: [0, 0], color: 0xa8c4ff, texRadius: 44, glow: true,
+  },
+  blueGiant: {
+    name: 'Blue giant', mass: 300, radius: 89, behaviour: 'drift',
+    drift: [0.08, 0.2], spin: [0, 0], color: 0x7aa2ff, texRadius: 64, glow: true,
+  },
+  whiteDwarf: {
+    name: 'White dwarf', mass: 6000, radius: 240, behaviour: 'drift',
+    drift: [0.03, 0.08], spin: [0, 0], color: 0xdfe8ff, texRadius: 56, glow: true,
+  },
   rival: {
     name: 'Rival black hole', mass: 100000, radius: 0, behaviour: 'rival', // radius comes from its mass
     spin: [0, 0], color: COLORS.rivalRing, texRadius: 96,
@@ -309,7 +414,7 @@ export const OBJECTS = {
 
 export const SPAWNER = {
   count: 160, // free-floating objects kept around the player
-  reserve: 80, // extra pooled objects for moons, orbiting planets and scattered stars (cap 300 total)
+  reserve: 140, // extra pooled objects: moons, orbiting planets, scattered stars, busier eras (cap 300 total)
   spawnRadius: 2.2, // objects live within this × the view's half-diagonal around the camera...
   recycleRadius: 2.8, // ...and are moved back near the player once they drift past this
   respawnMargin: 80, // screen px beyond the view edge where eaten objects reappear
@@ -365,7 +470,7 @@ export const UPGRADES = {
   gravityPull: { name: 'Gravity Pull', effect: '+10% pull range', perLevel: 0.1, cost: 50, maxLevel: 10 },
   thrusters: { name: 'Thrusters', effect: '+8% top speed', perLevel: 0.08, cost: 50, maxLevel: 10 },
   headStart: { name: 'Head Start', effect: '+10% starting mass', perLevel: 0.1, cost: 100, maxLevel: 10 },
-  timeDilation: { name: 'Time Dilation', effect: '+10 s per level', perLevel: 10, cost: 75, maxLevel: 10 },
+  timeDilation: { name: 'Time Dilation', effect: '+10 s per level · −8% evaporation in runs', perLevel: 10, evaporationPerLevel: 0.08, cost: 75, maxLevel: 10 },
   hawkingShield: { name: 'Hawking Shield', effect: '−1% mass lost on impact', perLevel: 0.01, cost: 100, maxLevel: 10 },
   darkMatterDrip: { name: 'Dark Matter Drip', effect: '+5 Stardust per hour offline', perLevel: 5, cost: 150, maxLevel: 10, capHours: 8 },
 };

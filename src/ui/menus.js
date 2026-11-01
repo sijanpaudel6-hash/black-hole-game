@@ -6,7 +6,7 @@ import { getSave, writeSave, resetSave } from '../systems/save.js';
 import { getLevel, LEVEL_COUNT } from '../data/levels.js';
 import { SCIENCE_CARDS } from '../data/scienceCards.js';
 import { SCENARIOS } from '../data/scenarios.js';
-import { TIERS, SANDBOX_UNLOCK_LEVEL } from '../config.js';
+import { TIERS, RUN, SANDBOX_UNLOCK_LEVEL, SANDBOX_UNLOCK_ERA } from '../config.js';
 import { massToKg, kgHtml, formatInt, formatTime } from '../systems/format.js';
 import { effects } from '../systems/economy.js';
 import { showScienceCard } from './scienceCard.js';
@@ -20,12 +20,15 @@ function stardustHtml() {
 }
 
 export function sandboxUnlocked() {
-  return getSave().levelsCleared >= SANDBOX_UNLOCK_LEVEL;
+  const save = getSave();
+  return save.levelsCleared >= SANDBOX_UNLOCK_LEVEL || save.bestEra >= SANDBOX_UNLOCK_ERA;
 }
 
+/** Highest size tier the player has reached, in Classic or in a run (eras use the same scales). */
 export function highestTierUnlocked() {
-  const next = Math.min(LEVEL_COUNT, getSave().levelsCleared + 1);
-  return getLevel(next).tier.id;
+  const save = getSave();
+  const next = Math.min(LEVEL_COUNT, save.levelsCleared + 1);
+  return Math.max(getLevel(next).tier.id, save.bestEra);
 }
 
 // ---------------------------------------------------------------------------
@@ -34,6 +37,8 @@ export function highestTierUnlocked() {
 
 export function renderTitle() {
   const unlocked = sandboxUnlocked();
+  const save = getSave();
+  const best = save.bestEra ? RUN.eras[save.bestEra - 1] : null;
   const node = mount(
     'screen',
     `<div class="screen title-screen fade-in">
@@ -51,8 +56,14 @@ export function renderTitle() {
       <div class="title-name">Black Hole<span class="sub">Event Horizon</span></div>
       <div class="title-actions">
         <button class="btn-primary" data-act="play">Play ${ICONS.play}</button>
+        <div class="label best-run">${best ? `Best run · Era ${best.id} ${best.name}${save.runsCompleted ? ` · ${save.runsCompleted}× the last light` : ''}` : 'One life · five eras · from the dawn of time to its end'}</div>
         <div class="title-links">
-          <button class="btn-text" data-act="sandbox" ${unlocked ? '' : 'disabled'}>[ Sandbox${unlocked ? '' : ` · Lv ${SANDBOX_UNLOCK_LEVEL}`} ]</button>
+          <button class="btn-text" data-act="classic">[ Classic ]</button>
+          <span class="sep"></span>
+          <button class="btn-text" data-act="sandbox" ${unlocked ? '' : 'disabled'}>[ Sandbox${unlocked ? '' : ' · locked'} ]</button>
+        </div>
+        <div class="title-links" style="margin-top:0">
+          <button class="btn-text" data-act="shop">[ Upgrades ]</button>
           <span class="sep"></span>
           <button class="btn-text" data-act="settings">[ Settings ]</button>
         </div>
@@ -60,8 +71,10 @@ export function renderTitle() {
     </div>`,
   );
   on(node, {
-    '[data-act=play]': () => flow.goMenu('levels'),
-    '[data-act=sandbox]': () => (unlocked ? flow.goMenu('sandbox') : toast(`Clear level ${SANDBOX_UNLOCK_LEVEL} to unlock Sandbox`)),
+    '[data-act=play]': () => flow.startRun(),
+    '[data-act=classic]': () => flow.goMenu('levels'),
+    '[data-act=shop]': () => flow.goShop({ from: 'title' }),
+    '[data-act=sandbox]': () => (unlocked ? flow.goMenu('sandbox') : toast(`Reach ${RUN.eras[SANDBOX_UNLOCK_ERA - 1].name} in a run to unlock Sandbox`)),
     '[data-act=settings]': () => flow.goMenu('settings', { from: 'title' }),
   });
 }
@@ -110,7 +123,7 @@ export function renderLevelSelect(data = {}) {
     `<div class="screen levels-screen fade-in">
       <div class="topbar">
         <button class="back" data-act="back">${ICONS.back} Return</button>
-        <span class="chip"><i class="dot science"></i>Star chart</span>
+        <span class="chip"><i class="dot science"></i>Classic · Star chart</span>
         <div style="text-align:right">${stardustHtml()}</div>
       </div>
       <div class="levels-scroll">${tiersHtml}</div>
@@ -233,7 +246,7 @@ export function renderLibrary(data = {}) {
   const rows = SCIENCE_CARDS.map((c) => {
     const ok = have.includes(c.id);
     return `<button data-card="${c.id}" ${ok ? '' : 'disabled'}>
-      <div><div class="label science">Science log · ${pad2(c.id)}</div><div class="head">${ok ? c.title : '???'}</div>${ok ? '' : `<div class="label">${c.id === 1 ? 'Clear level 1' : `Reach tier ${c.id}`}</div>`}</div>
+      <div><div class="label science">Science log · ${pad2(c.id)}</div><div class="head">${ok ? c.title : '???'}</div>${ok ? '' : `<div class="label">${c.id === 1 ? 'Finish a run' : `Reach ${RUN.eras[c.id - 1].name}`}</div>`}</div>
       ${ok ? ICONS.arrow : ICONS.lock}
     </button>`;
   }).join('');

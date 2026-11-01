@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import {
   GAME, COLORS, DEPTH, CAMERA, LEVEL, TIERS, DANGER, EFFECTS, HUD, BOSS, GROWTH, WORLD_EDGE, MILESTONES,
-  LOW_GRAPHICS, RECORDING, ADS, EATING,
+  LOW_GRAPHICS, RECORDING, ADS, EATING, RUN,
 } from '../config.js';
 import BlackHole, { radiusForMass } from '../objects/BlackHole.js';
 import Spawner from '../systems/spawner.js';
@@ -15,18 +15,20 @@ import { audio } from '../systems/audio.js';
 import { ClipRecorder, downloadClip, recordingSupported } from '../systems/recorder.js';
 import { showRewardedAd } from '../systems/ads.js';
 import { createScenario } from '../systems/scenarios.js';
+import RunController from '../systems/run.js';
 import { getLevel, LEVEL_COUNT } from '../data/levels.js';
 import { getScenario } from '../data/scenarios.js';
 import Hud from '../ui/hud.js';
 import { toast, clear } from '../ui/dom.js';
-import { renderPause, renderLevelComplete, renderLevelFailed, renderScenarioEnd, closeModal } from '../ui/overlays.js';
+import { renderPause, renderLevelComplete, renderLevelFailed, renderScenarioEnd, renderRunEnd, closeModal } from '../ui/overlays.js';
 import { showScienceCard } from '../ui/scienceCard.js';
 import { highestTierUnlocked } from '../ui/menus.js';
 import * as flow from '../flow.js';
 
 /**
- * Gameplay for all three modes:
- *  - 'level'    timed level with a target mass, danger and upgrades
+ * Gameplay for all four modes:
+ *  - 'run'      the main mode: one life through five eras (logic in systems/run.js)
+ *  - 'level'    Classic: timed level with a target mass, danger and upgrades
  *  - 'sandbox'  no timer, no danger, spawn objects from a menu
  *  - 'scenario' a scripted "What if…?" scene (see systems/scenarios.js)
  */
@@ -36,10 +38,20 @@ export default class GameScene extends Phaser.Scene {
   }
 
   init(data) {
-    this.mode = data?.mode ?? 'level';
+    this.mode = data?.mode ?? 'run';
     this.levelNum = data?.level ?? 1;
     this.sandboxTier = data?.tier ?? 1;
     this.scenarioId = data?.scenario ?? 'earth';
+    // Phaser reuses this scene object between games: clear anything a previous game left.
+    this.run = null;
+    this.scenario = null;
+    this.boss = null;
+    this.level = null;
+    this.killer = null;
+    this.recorder = null;
+    this.fixedZoom = null;
+    this.feedRate = undefined;
+    this.stoppingRecording = false;
   }
 
   create() {
@@ -57,7 +69,14 @@ export default class GameScene extends Phaser.Scene {
     this.timeLeft = Infinity;
     this.speedMultiplier = upgrades.speedMultiplier();
     this.pullRange = upgrades.pullRange();
-    if (this.mode === 'level') {
+    if (this.mode === 'run') {
+      const era = RUN.eras[0];
+      this.startMass = era.startMass * upgrades.startMassMultiplier();
+      this.target = era.goal;
+      weights = era.weights;
+      this.danger = true;
+      this.feeding = false;
+    } else if (this.mode === 'level') {
       this.level = getLevel(this.levelNum);
       this.startMass = this.level.tier.startMass * upgrades.startMassMultiplier();
       this.target = this.level.target;
@@ -136,6 +155,7 @@ export default class GameScene extends Phaser.Scene {
 
     // Scenario scripts may move the black hole and place objects before spawning.
     if (this.mode === 'scenario') this.scenario = createScenario(this.scenarioId, this);
+    if (this.mode === 'run') this.run = new RunController(this);
     cam.setZoom((CAMERA.screenRadius / this.bh.radius) * this.zoomBase);
     cam.centerOn(this.bh.x, this.bh.y);
     this.spawner.populate(this.bh, this.viewAt(this.bh.x, this.bh.y, cam.zoom));
@@ -156,6 +176,7 @@ export default class GameScene extends Phaser.Scene {
         onTier: (t) => flow.startSandbox(t),
       },
     });
+    if (this.run) this.hud.setEra(this.run.era);
     this.scene.launch('UIScene', { mode: this.mode });
     this.ui = this.scene.get('UIScene');
 
@@ -177,6 +198,11 @@ export default class GameScene extends Phaser.Scene {
 
     // Start-of-level touches
     this.time.delayedCall(50, () => {
+      if (this.mode === 'run') {
+        const era = this.run.era;
+        toast(save.runsPlayed === 0 ? 'Hold and drag to move · eat, or evaporate' : era.blurb, 3500);
+        this.ui.showBanner(`Era ${era.id}`, era.name, 2);
+      }
       if (this.mode === 'level') {
         const msg = this.level.boss
           ? 'Reach the target mass, then dive into Sagittarius A*'
@@ -277,14 +303,22 @@ export default class GameScene extends Phaser.Scene {
     if (!this.ended) {
       this.elapsed += dt;
       if (this.mode === 'level') this.updateLevel(dt);
+      if (this.run) this.run.update(dt);
       this.checkMilestones();
     }
 
     this.hud.update({
       kg: this.currentKg(),
-      progress: this.target ? Math.max(0, (bh.mass - this.startMass) / (this.target - this.startMass)) : 0,
+      progress: this.run ? this.run.progress() : this.target ? Math.max(0, (bh.mass - this.startMass) / (this.target - this.startMass)) : 0,
       timeLeft: this.timeLeft,
     });
+    if (this.run) {
+      this.hud.updateRun({
+        age: this.run.age(),
+        evaporating: this.run.evaporating && this.run.lossRate > 0,
+        quasar: this.run.era.quasar ? this.run.quasarMeter : undefined,
+      });
+    }
     if (this.recorder?.recording) this.hud.setRecTime(this.recorder.elapsed);
   }
 
@@ -317,7 +351,7 @@ export default class GameScene extends Phaser.Scene {
     }
     const rate = this.zoomMulTarget < this.zoomMul ? 4 : this.zoomMulTarget > 1 ? 5 : CAMERA.tierUpEase;
     this.zoomMul += (this.zoomMulTarget - this.zoomMul) * (1 - Math.exp(-rate * realDt));
-    const want = (CAMERA.screenRadius / this.bh.drawnRadius) * this.zoomMul * this.zoomBase;
+    const want = this.fixedZoom ?? (CAMERA.screenRadius / this.bh.drawnRadius) * this.zoomMul * this.zoomBase;
     cam.setZoom(cam.zoom + (want - cam.zoom) * (1 - Math.exp(-CAMERA.zoomEase * realDt)));
     // Follow with a slight, frame-rate independent lag.
     if (this.camTarget) {
@@ -396,7 +430,8 @@ export default class GameScene extends Phaser.Scene {
     this.bh.velocity.y += (dy / d) * a * dt;
   }
 
-  tierUpMoment(tier) {
+  /** Slow motion, dramatic zoom-out and a banner: tier-ups in Classic, era changes in runs. */
+  tierUpMoment(title, sub) {
     this.tierUpDone = true;
     this.slowMo(EFFECTS.tierUpSlowMo, EFFECTS.tierUpSlowMoTime);
     this.zoomPulse(CAMERA.tierUpZoom, CAMERA.tierUpHold);
@@ -404,7 +439,7 @@ export default class GameScene extends Phaser.Scene {
     audio.bassDrop(1);
     this.effects.shockwave(this.bh.x, this.bh.y, this.bh.radius * 8, COLORS.amber, 1.4);
     this.effects.flash(this.bh.x, this.bh.y, this.bh.radius * 4, COLORS.amber, 0.6);
-    this.ui.showBanner(`Tier ${tier.id}`, tier.name, 2.6);
+    this.ui.showBanner(title, sub, 2.6);
   }
 
   winLevel() {
@@ -412,7 +447,8 @@ export default class GameScene extends Phaser.Scene {
     this.ended = true;
     audio.setRumble(0);
     if (this.level.isLastInTier && this.level.tier.id < 5) {
-      this.tierUpMoment(TIERS[this.level.tier.id]);
+      const next = TIERS[this.level.tier.id];
+      this.tierUpMoment(`Tier ${next.id}`, next.name);
     } else {
       this.slowMo(EFFECTS.slowMoScale, LEVEL.winDelay);
       this.zoomPulse(0.75, LEVEL.winDelay);
@@ -444,6 +480,10 @@ export default class GameScene extends Phaser.Scene {
   }
 
   failLevel(reason) {
+    if (this.run) {
+      this.run.die(reason);
+      return;
+    }
     if (this.ended) return;
     this.ended = true;
     this.failReason = reason;
@@ -541,6 +581,38 @@ export default class GameScene extends Phaser.Scene {
     toast(`+${ADS.reviveSeconds} s`);
   }
 
+  /** Called by RunController when a run ends. */
+  showRunEnd(r) {
+    const save = getSave();
+    renderRunEnd({
+      ...r,
+      objects: this.objectsEaten,
+      time: this.elapsed,
+      canRevive: !r.completed && !this.revived,
+      canDouble: r.reward.total > 0,
+      onAgain: () => flow.startRun(),
+      onShop: () => flow.goShop({ from: 'run' }),
+      onMenu: () => flow.goMenu('title'),
+      onRevive: () => showRewardedAd(() => {
+        closeModal();
+        this.run.revive();
+      }),
+      onDouble: (update) =>
+        showRewardedAd(() => {
+          save.stardust += r.reward.total;
+          writeSave();
+          update(r.reward.total * 2);
+        }),
+    });
+    // Show newly unlocked science cards one after another.
+    const queue = [...r.newCards];
+    const next = () => {
+      const id = queue.shift();
+      if (id) showScienceCard(id, next);
+    };
+    next();
+  }
+
   // ---------------------------------------------------------------------------
   // Eating and collisions
   // ---------------------------------------------------------------------------
@@ -556,6 +628,7 @@ export default class GameScene extends Phaser.Scene {
     if (!this.ended) {
       this.eaten += gain;
       if (obj.bonus > 1) this.bonusMass += gain * (obj.bonus - 1);
+      this.run?.onGain(gain, obj.bonus > 1 ? gain * (obj.bonus - 1) : 0);
       this.objectsEaten++;
       if (!this.biggest || obj.mass > this.biggest.mass) this.biggest = { name: obj.def.name, mass: obj.mass };
     }
@@ -590,7 +663,7 @@ export default class GameScene extends Phaser.Scene {
     if (obj.named) {
       this.ui.showLabel(obj.def.name, kgText(obj.realKg, 2), true);
     } else if (ratio >= HUD.labelMinRatio || obj.type === 'rival') {
-      this.ui.showLabel(obj.def.name, `+${kgText(Math.max(0, this.currentKg() - kgBefore), 1)}`, false);
+      this.ui.showLabel(obj.rivalName ?? obj.def.name, `+${kgText(Math.max(0, this.currentKg() - kgBefore), 1)}`, false);
     }
     this.scenario?.onSwallow?.(obj);
   }
@@ -675,19 +748,20 @@ export default class GameScene extends Phaser.Scene {
     if (this.recorder?.recording) this.stopRecording();
     audio.setRumble(0);
     this.scene.pause();
-    const backTo = this.mode === 'level' ? 'levels' : 'sandbox';
+    const backTo = this.mode === 'level' ? 'levels' : this.mode === 'run' ? 'title' : 'sandbox';
     renderPause({
       onResume: () => {
         closeModal();
         this.scene.resume();
       },
       onRestart: () => {
-        if (this.mode === 'level') flow.startLevel(this.levelNum);
+        if (this.mode === 'run') flow.startRun();
+        else if (this.mode === 'level') flow.startLevel(this.levelNum);
         else if (this.mode === 'sandbox') flow.startSandbox(this.sandboxTier);
         else flow.startScenario(this.scenarioId);
       },
       onQuit: () => flow.goMenu(backTo, this.mode === 'level' ? { selected: this.levelNum } : {}),
-      quitLabel: this.mode === 'level' ? 'Star chart' : 'Sandbox menu',
+      quitLabel: this.mode === 'level' ? 'Star chart' : this.mode === 'run' ? 'Main menu' : 'Sandbox menu',
     });
   }
 

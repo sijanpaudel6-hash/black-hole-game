@@ -1422,3 +1422,13 @@ sup {
 .rotate-hint {
   display: none;
 }
+
+/* ---------- Run mode ---------- */
+
+.era-warn {
+  animation: blink 1s infinite;
+}
+
+.best-run {
+  margin-top: 10px;
+}

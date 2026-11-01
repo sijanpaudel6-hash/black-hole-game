@@ -78,3 +78,19 @@ export function formatInt(n) {
 export function todayKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
+
+// ---- Cosmic age (run mode) ----
+
+/** HTML for the HUD: "380 Myr", "2.4 Gyr", "10¹⁴ yr". */
+export function ageHtml(years) {
+  if (years < 1e9) return `${Math.round(years / 1e6)}<span class="sci-unit">Myr</span>`;
+  if (years < 1e11) return `${(years / 1e9).toFixed(1)}<span class="sci-unit">Gyr</span>`;
+  return `10<sup>${Math.floor(Math.log10(years))}</sup><span class="sci-unit">yr</span>`;
+}
+
+/** Plain text: "380 million years", "2.4 billion years", "10¹⁴ years". */
+export function ageText(years) {
+  if (years < 1e9) return `${Math.round(years / 1e6)} million years`;
+  if (years < 1e11) return `${(years / 1e9).toFixed(1)} billion years`;
+  return `10${superscript(Math.floor(Math.log10(years)))} years`;
+}

@@ -17,7 +17,12 @@ function defaults() {
     lastPlayed: Date.now(),
     lastDailyWin: '', // YYYY-MM-DD of the last first-win-of-the-day bonus
     lastFreeUpgrade: '', // YYYY-MM-DD of the last free (ad) upgrade
-    gameCompleted: false,
+    gameCompleted: false, // Classic level 15 cleared
+    // Run mode
+    runsPlayed: 0,
+    runsCompleted: 0, // reached the end of the Far Future
+    bestEra: 0, // furthest era reached (1–5)
+    bestRunKg: 0, // biggest mass reached in a run (kg, display scale)
   };
 }
 
