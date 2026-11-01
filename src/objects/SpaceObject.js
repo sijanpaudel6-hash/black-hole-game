@@ -1,109 +1,173 @@
 import Phaser from 'phaser';
-import { DEPTH, EATING, GROWTH, OBJECTS, SPAWNER, WORLD } from '../config.js';
+import { DEPTH, OBJECTS } from '../config.js';
+import { TEXTURE_INFO, objectTextureKey } from '../systems/textures.js';
+import { radiusForMass } from './BlackHole.js';
+
+const TAU = Math.PI * 2;
+const rand = (r) => (Array.isArray(r) ? Phaser.Math.FloatBetween(r[0], r[1]) : r);
 
 /**
  * An edible or dangerous object: a size, a mass value and a movement behaviour.
- * Objects are pooled: when one is eaten the spawner calls reset() to turn it
- * into a fresh object somewhere off-screen instead of creating a new one.
+ * Objects are pooled and reused: reset() turns one into a fresh object.
+ *
+ * role:
+ *  - 'root'       free-floating; respawns off-screen when eaten or left behind
+ *  - 'extra'      moons, orbiting planets, scattered stars; returned to the pool instead
+ *  - 'persistent' scenario objects; never recycled
  */
 export default class SpaceObject extends Phaser.GameObjects.Image {
   constructor(scene) {
-    super(scene, 0, 0, SpaceObject.textureKey('dust'));
-    this.vx = 0; // current velocity (drift + pull)
-    this.vy = 0;
-    this.driftX = 0; // the object's own lazy drift, which it settles back to
-    this.driftY = 0;
-    this.spin = 0;
-    this.phase = 0;
-    this.edible = null;
+    super(scene, 0, 0, 'spark');
+    this.inUse = false;
+    this.gen = 0;
+    this.setVisible(false).setActive(false);
     scene.add.existing(this);
   }
 
-  static textureKey(type) {
-    return `obj-${type}`;
-  }
-
-  /** Become a new object of `type` at (x, y) with a random drift and spin. */
-  reset(type, x, y) {
+  reset(type, x, y, opts = {}) {
     const def = OBJECTS[type];
     this.type = type;
     this.def = def;
-    this.radius = def.radius;
-    this.mass = def.mass;
+    this.behaviour = def.behaviour;
+    this.role = opts.role ?? 'root';
+    this.gen += 1;
+    this.inUse = true;
+    this.mass = opts.mass ?? def.mass;
+    this.startMass = this.mass;
+    this.radius = opts.radius ?? (type === 'rival' ? radiusForMass(this.mass) : def.radius);
+    this.startRadius = this.radius;
+    this.realKg = opts.realKg ?? def.realKg ?? null;
+    this.named = !!def.named;
+    this.bonus = def.bonus ?? 1;
+    this.edible = null;
+    this.feeding = false;
+    this.pulled = false;
+    this.think = 0;
+    this.targetX = x;
+    this.targetY = y;
 
-    this.setTexture(SpaceObject.textureKey(type));
-    this.setScale(1 / SPAWNER.textureScale);
+    const key = objectTextureKey(type);
+    const info = TEXTURE_INFO[key];
+    this.setTexture(key);
+    this.setOrigin(info.originX, info.originY);
+    this.texBody = info.bodyRadius;
+    this.applySize();
+    if (def.tints) this.setTint(Phaser.Utils.Array.GetRandom(def.tints));
+    else this.clearTint();
+    this.setAlpha(1).setVisible(true).setActive(true);
     this.setPosition(x, y);
-    this.setRotation(Math.random() * Math.PI * 2);
-    this.setAlpha(1);
+    this.setRotation(type === 'rival' || def.named ? 0 : Math.random() * TAU);
 
-    const angle = Math.random() * Math.PI * 2;
-    const speed = Phaser.Math.FloatBetween(def.drift[0], def.drift[1]);
+    const angle = Math.random() * TAU;
+    const speed = def.drift ? rand(def.drift) * this.radius : 0;
     this.driftX = Math.cos(angle) * speed;
     this.driftY = Math.sin(angle) * speed;
     this.vx = this.driftX;
     this.vy = this.driftY;
-    this.spin = Phaser.Math.FloatBetween(def.spin[0], def.spin[1]) * (Math.random() < 0.5 ? -1 : 1);
-    this.phase = Math.random() * Math.PI * 2;
-    this.edible = null; // forces a depth update next frame
-  }
+    this.spin = rand(def.spin ?? 0) * (Math.random() < 0.5 ? -1 : 1);
+    this.phase = Math.random() * TAU;
 
-  /**
-   * Move one frame. Edible objects inside the pull zone accelerate toward the
-   * black hole, faster the closer they are.
-   * @returns {boolean} true if the object's centre is inside the black hole (swallowed)
-   */
-  step(dt, time, blackHole) {
-    const edible = this.radius < blackHole.radius * EATING.edibleRatio;
-    if (edible !== this.edible) {
-      this.edible = edible;
-      this.setDepth(edible ? DEPTH.edibleObjects : DEPTH.inedibleObjects);
-    }
-
-    let pulled = false;
-    if (edible) {
-      const dx = blackHole.x - this.x;
-      const dy = blackHole.y - this.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist < blackHole.radius) return true;
-
-      const range = blackHole.radius * EATING.pullRangeMultiplier;
-      if (dist < range) {
-        pulled = true;
-        const closeness = 1 - dist / range; // 0 at the zone edge, 1 at the centre
-        const accel = EATING.pullAcceleration * (blackHole.radius / GROWTH.baseRadius) * closeness;
-        this.vx += (dx / dist) * accel * dt;
-        this.vy += (dy / dist) * accel * dt;
-        // Match the black hole's motion so pulled objects get captured and fall in.
-        const k = (1 - Math.exp(-EATING.pullDrag * dt)) * closeness;
-        this.vx += (blackHole.velocity.x - this.vx) * k;
-        this.vy += (blackHole.velocity.y - this.vy) * k;
+    // Orbits: around a parent object, or around an invisible point.
+    this.parent = opts.parent ?? null;
+    this.parentGen = this.parent ? this.parent.gen : 0;
+    this.orbiting = !!this.parent || this.behaviour === 'orbitPoint';
+    if (this.orbiting) {
+      const around = this.parent ? this.parent.radius : this.radius;
+      this.orbitRadius = rand(opts.orbitRadius ?? def.orbitRadius) * around;
+      const period = rand(opts.orbitPeriod ?? def.orbitPeriod);
+      this.orbitSpeed = (TAU / period) * (Math.random() < 0.5 ? -1 : 1);
+      this.orbitAngle = Math.random() * TAU;
+      if (this.parent) {
+        this.x = this.parent.x + Math.cos(this.orbitAngle) * this.orbitRadius;
+        this.y = this.parent.y + Math.sin(this.orbitAngle) * this.orbitRadius;
+      } else {
+        this.orbitCx = x - Math.cos(this.orbitAngle) * this.orbitRadius;
+        this.orbitCy = y - Math.sin(this.orbitAngle) * this.orbitRadius;
       }
     }
-
-    if (!pulled) {
-      // Outside the pull zone: settle back to a lazy drift.
-      const k = 1 - Math.exp(-EATING.releaseDrag * dt);
-      this.vx += (this.driftX - this.vx) * k;
-      this.vy += (this.driftY - this.vy) * k;
-    }
-
-    this.x += this.vx * dt;
-    this.y += this.vy * dt;
-    this.rotation += this.spin * dt;
-    if (this.def.sparkle > 0) {
-      this.alpha = 1 - this.def.sparkle * (0.5 + 0.5 * Math.sin(time * this.def.sparkleSpeed + this.phase));
-    }
-    this.bounceOffWorldEdge();
-    return false;
+    if (this.behaviour === 'comet') this.rotation = Math.atan2(this.vy, this.vx);
+    this.setDepth(DEPTH.inedibleObjects);
+    return this;
   }
 
-  bounceOffWorldEdge() {
-    const limit = WORLD.radius - this.radius;
+  applySize() {
+    this.setScale(this.radius / this.texBody);
+  }
+
+  /** Change mass; rivals grow by the black hole formula, everything else by cube root of its own size. */
+  setMass(m) {
+    this.mass = m;
+    this.radius = this.type === 'rival' ? radiusForMass(m) : this.startRadius * Math.cbrt(m / this.startMass);
+    this.applySize();
+  }
+
+  release() {
+    this.inUse = false;
+    this.parent = null;
+    this.gen += 1;
+    this.setVisible(false).setActive(false);
+  }
+
+  /** Stop orbiting and fly free with the current velocity. */
+  freeFromOrbit() {
+    if (!this.orbiting) return;
+    this.orbiting = false;
+    this.parent = null;
+    this.driftX = this.vx * 0.3;
+    this.driftY = this.vy * 0.3;
+  }
+
+  /** Move one frame (forces were already applied to vx/vy). */
+  integrate(dt, time) {
+    if (this.orbiting) {
+      if (this.parent && (!this.parent.inUse || this.parent.gen !== this.parentGen)) {
+        this.freeFromOrbit();
+      } else {
+        this.orbitAngle += this.orbitSpeed * dt;
+        const cx = this.parent ? this.parent.x : this.orbitCx;
+        const cy = this.parent ? this.parent.y : this.orbitCy;
+        const nx = cx + Math.cos(this.orbitAngle) * this.orbitRadius;
+        const ny = cy + Math.sin(this.orbitAngle) * this.orbitRadius;
+        if (dt > 0) {
+          this.vx = (nx - this.x) / dt;
+          this.vy = (ny - this.y) / dt;
+        }
+        this.x = nx;
+        this.y = ny;
+      }
+    }
+    if (!this.orbiting) {
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+    }
+    if (this.behaviour === 'comet') {
+      if (this.vx * this.vx + this.vy * this.vy > 1) this.rotation = Math.atan2(this.vy, this.vx);
+    } else {
+      this.rotation += this.spin * dt;
+    }
+    if (this.def.sparkle) {
+      this.alpha = 1 - this.def.sparkle * (0.5 + 0.5 * Math.sin(time * this.def.sparkleSpeed + this.phase));
+    }
+  }
+
+  /** Settle back toward its own lazy drift (when nothing is pulling on it). */
+  settle(k) {
+    if (this.orbiting) return;
+    this.vx += (this.driftX - this.vx) * k;
+    this.vy += (this.driftY - this.vy) * k;
+  }
+
+  bounceOffWorldEdge(worldRadius) {
+    const limit = worldRadius - this.radius;
     const dist = Math.hypot(this.x, this.y);
-    if (dist <= limit) return;
+    if (dist <= limit || dist === 0) return;
     const nx = this.x / dist;
     const ny = this.y / dist;
+    if (this.orbiting && !this.parent) {
+      // Shift the whole orbit inward.
+      this.orbitCx -= nx * (dist - limit);
+      this.orbitCy -= ny * (dist - limit);
+    }
     this.x = nx * limit;
     this.y = ny * limit;
     const outV = this.vx * nx + this.vy * ny;
@@ -117,69 +181,4 @@ export default class SpaceObject extends Phaser.GameObjects.Image {
       this.driftY -= 2 * outD * ny;
     }
   }
-
-  // ---- Textures (drawn in code once per type) ----------------------------
-
-  static createTextures(scene) {
-    for (const [type, def] of Object.entries(OBJECTS)) {
-      const key = SpaceObject.textureKey(type);
-      if (scene.textures.exists(key)) continue;
-      const r = def.radius * SPAWNER.textureScale;
-      const pad = 2;
-      const size = Math.ceil(r * 2 + pad * 2);
-      const g = scene.make.graphics({ x: 0, y: 0 }, false);
-      g.translateCanvas(size / 2, size / 2);
-      DRAW[type](g, r, def.color);
-      g.generateTexture(key, size, size);
-      g.destroy();
-    }
-  }
 }
-
-const shade = (color, amount) => {
-  const c = Phaser.Display.Color.IntegerToColor(color);
-  return (amount > 0 ? c.lighten(amount) : c.darken(-amount)).color;
-};
-
-// Irregular polygon: n vertices at radius r × [minR, 1].
-const lumpyPolygon = (g, r, n, minR) => {
-  const pts = [];
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2;
-    const d = r * Phaser.Math.FloatBetween(minR, 1);
-    pts.push(new Phaser.Math.Vector2(Math.cos(a) * d, Math.sin(a) * d));
-  }
-  g.fillPoints(pts, true);
-};
-
-const DRAW = {
-  dust(g, r, color) {
-    g.fillStyle(color, 0.2).fillCircle(0, 0, r);
-    g.fillStyle(color, 0.5).fillCircle(0, 0, r * 0.8);
-    g.fillStyle(color, 1).fillCircle(0, 0, r * 0.58);
-  },
-  iceCrystal(g, r, color) {
-    const diamond = (s) => [
-      new Phaser.Math.Vector2(0, -r * s),
-      new Phaser.Math.Vector2(r * s * 0.55, 0),
-      new Phaser.Math.Vector2(0, r * s),
-      new Phaser.Math.Vector2(-r * s * 0.55, 0),
-    ];
-    g.fillStyle(color, 0.9).fillPoints(diamond(1), true);
-    g.fillStyle(0xffffff, 1).fillPoints(diamond(0.45), true);
-  },
-  pebble(g, r, color) {
-    g.fillStyle(color, 1);
-    lumpyPolygon(g, r, 10, 0.86);
-    g.fillStyle(shade(color, 18), 1).fillCircle(-r * 0.3, -r * 0.3, r * 0.28);
-  },
-  smallRock(g, r, color) {
-    g.fillStyle(color, 1);
-    lumpyPolygon(g, r, 11, 0.74);
-    g.fillStyle(shade(color, -14), 1);
-    g.fillCircle(r * 0.25, r * 0.2, r * 0.2);
-    g.fillCircle(-r * 0.3, r * 0.35, r * 0.12);
-    g.fillCircle(-r * 0.15, -r * 0.35, r * 0.14);
-    g.fillStyle(shade(color, 14), 1).fillCircle(-r * 0.4, -r * 0.1, r * 0.08);
-  },
-};
