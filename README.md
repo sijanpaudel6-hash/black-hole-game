@@ -9,6 +9,7 @@ npm run build    # static build in dist/
 ```
 
 Every push to `main` builds the game and deploys it to GitHub Pages:
-https://sijanpaudel.github.io/black-hole-game/
+https://sijanpaudel6-hash.github.io/black-hole-game/
+(one-time setup: repo **Settings → Pages → Source: GitHub Actions**).
 
 All tunable numbers live in `src/config.js`.
