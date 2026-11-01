@@ -75,6 +75,11 @@ export default class Hud {
             </div>
           </div>
         </div>
+        <div class="civ-choice" style="display:none">
+          <button class="civ-btn eat" data-civ="eat"><b>Eat</b><span class="civ-sub eat-sub"></span></button>
+          <button class="civ-btn spare" data-civ="spare"><b>Spare</b><span class="civ-sub spare-sub"></span></button>
+          <div class="civ-timer"><i></i></div>
+        </div>
         <div class="rec-indicator" style="display:none"><i class="dot"></i><b>REC</b><span class="rec-time">00:00.00</span><button class="stop" data-act="stop">Save clip</button></div>
       </div>`,
     );
@@ -98,6 +103,7 @@ export default class Hud {
     on(this.node, {
       '[data-act=pause]': () => h.onPause(),
       '[data-act=jets]': () => h.onJets?.(),
+      '[data-civ]': (_e, b) => h.onCiv?.(b.dataset.civ === 'eat'),
       '[data-act=record]': () => h.onRecord(),
       '[data-act=stop]': () => h.onStopRecord(),
       '[data-spawn]': (_e, b) => h.onSpawn(b.dataset.spawn),
@@ -163,6 +169,29 @@ export default class Hud {
     this.set('age', ageHtml(age), (v) => (this.ageEl.innerHTML = v));
     this.set('evap', evaporating, (v) => (this.eraWarn.style.display = v ? '' : 'none'));
     if (quasar !== undefined) this.set('quasar', Math.round(quasar * 100), (v) => (this.eraQuasar.querySelector('b').style.width = `${v}%`));
+  }
+
+  /**
+   * EAT / SPARE buttons under the civilisation's message card.
+   * @param {{top:number, eat:string, spare:string, time:number}} o top in UI px
+   */
+  showCivChoice(o) {
+    const el = this.node.querySelector('.civ-choice');
+    el.style.top = `${o.top}px`;
+    el.querySelector('.eat-sub').textContent = o.eat;
+    el.querySelector('.spare-sub').textContent = o.spare;
+    const bar = el.querySelector('.civ-timer i');
+    bar.style.transition = 'none';
+    bar.style.width = '100%';
+    el.style.display = '';
+    requestAnimationFrame(() => {
+      bar.style.transition = `width ${o.time}s linear`;
+      bar.style.width = '0%';
+    });
+  }
+
+  hideCivChoice() {
+    this.node.querySelector('.civ-choice').style.display = 'none';
   }
 
   flashMass() {

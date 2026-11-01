@@ -1676,3 +1676,74 @@ sup {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+
+/* ---------- Civilisations: EAT / SPARE ---------- */
+
+.civ-choice {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.ui-hud .civ-choice button {
+  pointer-events: auto;
+}
+
+.civ-btn {
+  display: grid;
+  gap: 2px;
+  padding: 10px 8px;
+  background: var(--panel-solid);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  text-align: center;
+}
+
+.civ-btn b {
+  font-family: var(--head);
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 22px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.civ-btn.eat {
+  border-color: var(--amber);
+}
+
+.civ-btn.eat b {
+  color: var(--amber);
+}
+
+.civ-btn.spare {
+  border-color: var(--science);
+}
+
+.civ-btn.spare b {
+  color: var(--science);
+}
+
+.civ-sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--muted);
+}
+
+.civ-timer {
+  grid-column: 1 / -1;
+  height: 3px;
+  background: var(--hairline);
+}
+
+.civ-timer i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--text);
+}

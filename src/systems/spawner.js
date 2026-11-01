@@ -329,6 +329,7 @@ export default class Spawner {
    * @param {number} [ctx.swirl] Kerr Spin: tangential pull, × the normal pull
    * @param {number} [ctx.pullStrength] × pull acceleration
    * @param {{ratio:number, range:number, inward:number}|null} [ctx.shred] Tidal Shredder rule
+   * @param {boolean} [ctx.rivalsFlee] rivals keep away (a spared civilisation's honour guard)
    */
   update(dt, time, ctx) {
     const { bh } = ctx;
@@ -533,10 +534,10 @@ export default class Spawner {
       const d = Math.hypot(dx, dy) || 1;
       const canEatPlayer = r.radius * EATING.edibleRatio > bh.radius;
       const playerCanEat = r.radius < bh.radius * EATING.edibleRatio;
-      if (canEatPlayer && ctx.danger && d < r.radius * RIVAL.chaseRange) {
+      if (canEatPlayer && ctx.danger && !ctx.rivalsFlee && d < r.radius * RIVAL.chaseRange) {
         r.targetX = bh.x;
         r.targetY = bh.y;
-      } else if (playerCanEat && d < r.radius * RIVAL.fleeRange) {
+      } else if ((playerCanEat || ctx.rivalsFlee) && d < r.radius * RIVAL.fleeRange * (ctx.rivalsFlee ? 2 : 1)) {
         r.targetX = r.x - (dx / d) * r.radius * 10;
         r.targetY = r.y - (dy / d) * r.radius * 10;
       } else {

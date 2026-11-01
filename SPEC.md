@@ -1,6 +1,6 @@
 # Black Hole: Event Horizon — Game Spec
 
-Nov 1, 2026 · Sijan Paudel · **Updated after Session B to match the game as built**
+Nov 1, 2026 · Sijan Paudel · **Updated after Session C to match the game as built**
 
 ## Overview
 
@@ -101,6 +101,30 @@ Nov 1, 2026 · Sijan Paudel · **Updated after Session B to match the game as bu
 - Shattered objects become 4–6 **fragments** (80% of the mass, sized to be edible) that fly outward and get pulled in.
 - The run end screen lists the powers you took.
 
+### The Universe Talks Back (civilisations and Galactic News)
+
+**From the Galaxy Era on, inhabited planets hail you as you approach; you choose EAT or SPARE, and the rest of the galaxy remembers.** Numbers in `CIVS` (`config.js`), words in `src/data/civilisations.js` (313 approach messages across 5 tech levels and 11 moods, 48 species, plus 28 last words, 20 thank-yous and fleeing lines, all hand-written and family-friendly).
+
+- **When**: Galaxy Era, Quasar Era and Far Future (life needs the heavy elements earlier stars made). The first one comes 10 s into the era, then one every 20–30 s after the last is dealt with. Only one at a time.
+- **The planet**: a rocky planet, moon or gas giant at 50–68% of your size (always edible), drifting toward you, with a pulsing amber beacon ring. A scanner arrow at the screen edge points to it ("SIGNAL") while it's off-screen.
+- **The hail**: when your edge is within 6× your radius of theirs, the world slows to 35% and a message card appears (drawn in the canvas so it's in clips): "INCOMING TRANSMISSION", species and planet name, tech level · what they are · mood, the message, and what they offer if spared. Two buttons sit under it: **EAT** (+8% mass · +40 Stardust) and **SPARE** (the boon). A bar counts down 9 s; if you don't choose, the card closes and the planet is just food (eating it still counts as eating a civilisation).
+- **Tech levels** (weights per era in `CIVS.techWeights`): Stone age, Industrial, Space age (Galaxy Era on); Star empire, Ancient (Quasar Era on; Ancients are common in the Far Future).
+- **Eat**: the planet is hauled straight in (big-swallow close-up), they say their last words, and you get +8% of your mass and +40 Stardust. **Consequences**: every civilisation you eat makes the next ones more likely to be *terrified* or *hostile* (hostile worlds fire up to 4 homing missiles, each a shove and −2.5% mass) and adds a 10% chance (max 40%) that the next one just flees at speed without talking.
+- **Spare**: they thank you, drift away under a blue ring (they can't be eaten or hurt you), and give a **boon**: the one they offered, or a random one. Sparing makes later civilisations *hopeful* ("we heard you spare worlds"). Sparing a *hostile* world gives no gift but calls a truce: it forgets one of your past meals.
+
+| Boon | Effect |
+| --- | --- |
+| Star map | A feast of 14 meals appears 1.4 screens away; a blue arrow points to it for 30 s |
+| Hidden neutron star | A small, blazing neutron star appears nearby (arrow); eating it adds 14% of your mass |
+| Deflector gift | Your next 2 hits (objects or missiles) cost no mass; a blue ring shows it |
+| Fuel offering | +6% mass at once |
+| Stardust tribute | +60 Stardust at the end of the run |
+| Gravity tuning | +15% pull range for the rest of the run (stacks) |
+| Honour guard | Rival black holes keep away for 40 s |
+
+- **Galactic News**: a ticker under the top HUD (in the canvas, so it's in clips; it moves below the mass panel while recording). Pre-written funny headlines (`src/data/news.js`) report what you do: eating or sparing civilisations, big swallows, eating rivals, quasar ignition, synergies, new powers, milestones, era changes. When nothing has happened for 28–40 s an era-flavoured filler runs ("Galactic News will begin as soon as someone invents news"). Each shows 6.5 s; long ones scroll.
+- **Hook for later**: `Civs.messageFor()` is the one place a message is chosen, so a live AI message (from a small server, never with a key in the game) can replace it, with this bank as the offline fallback. Choice percentages ("only 14% spared them") need a server too and stay in "Later"; the decision screen is built so a percentage line can be added under the buttons.
+
 ## Classic mode (the original 15 levels)
 
 **Eat → grow → reach the target mass before the 3-minute timer runs out → spend Stardust → next level.** Each level starts at its tier's starting mass (plus Head Start). Time running out fails the level; on fail you keep half the Stardust and can Revive +30 s once (ad).
@@ -192,7 +216,7 @@ All values live in `config.js` (`OBJECTS`, `RIVAL`, `BOSS`).
 | Screen | Contents |
 | --- | --- |
 | Title | Logo, black hole art, **PLAY** (starts a run), best run, [Classic] [Sandbox] [Upgrades] [Settings] |
-| HUD (run) | Mass + "Next era" bar, cosmic age, era panel (meter, next era, Evaporating warning, Quasar meter), power icons, JETS button (with cooldown), record, pause |
+| HUD (run) | Mass + "Next era" bar, cosmic age, Galactic News ticker, era panel (meter, next era, Evaporating warning, Quasar meter), power icons, JETS button (with cooldown), record, pause; civilisation message card with EAT / SPARE and a countdown; scanner arrows |
 | Power pick | Era kicker, "Choose a power", 3 cards (icon, name, NEW / Level N, effect, level pips, synergy hint), your powers |
 | HUD (Classic) | Mass + target bar, time left, tier panel, record, pause |
 | Run end | Run complete / Run over, era reached, cosmic age, peak mass, objects, time, powers, Stardust, New run / Revive / ×2 / Upgrades / Menu |
@@ -236,8 +260,8 @@ black-hole-game/
     ├── flow.js             moving between screens and scenes
     ├── scenes/             TitleScene (menus), GameScene (run/classic/sandbox/scenario), ShopScene, UIScene (in-canvas overlay)
     ├── objects/            BlackHole, SpaceObject
-    ├── systems/            run (eras), powers, spawner, effects, textures, audio, recorder, scenarios, save, economy, ads, format, starfield, autopilot (dev bot)
-    ├── data/               levels, scienceCards, scenarios, rivals, powers
+    ├── systems/            run (eras), powers, civs, news, spawner, effects, textures, audio, recorder, scenarios, save, economy, ads, format, starfield, autopilot (dev bot)
+    ├── data/               levels, scienceCards, scenarios, rivals, powers, civilisations, news
     └── ui/                 HTML menus and HUD: dom, menus, hud, overlays, powerPick, shop, scienceCard, icons, styles.css
 ```
 
@@ -261,7 +285,7 @@ black-hole-game/
 
 - [x] **Session A – Runs and eras.** One run through five eras with Hawking evaporation in Cosmic Dawn, era changes using the tier-up moment, quasar ignition, the last-light finale. Fixed levels kept as Classic.
 - [x] **Session B – Cosmic powers.** Pick 1 of 3 at each era change; six powers with 3 levels, three synergies, HUD icons, JETS button. Run length retuned to 6–10 minutes. **→ Playtest gate: do runs feel different from each other?**
-- [ ] **Session C – The Universe Talks Back.** Civilisation planets with eat/spare choices, boons and consequences, Galactic News ticker.
+- [x] **Session C – The Universe Talks Back.** Civilisation planets with eat/spare choices, boons and consequences (fear, hostility, fleeing, hope), 365 hand-written lines, Galactic News ticker.
 - [ ] **Session D – Go viral.** Daily Universe seed, share card, Feed Your Hometown, "Eat the Milky Way in under 10 minutes".
 - [ ] **Session E – Cosmic events.** Supernova, tidal disruption, wandering black hole, wormhole, white hole, dark matter, merger chirp.
 - [ ] **Session F – Cosmic Craft (real recipes).**
@@ -297,4 +321,15 @@ How to start each session, ready to paste:
 - **Hawking Bloom triggers on hits** (the moment you lose mass), not on evaporation, which is continuous and would fire constantly. Level 3's Last Gasp gives one survivable mistake per run, which suits the "one life" structure.
 - **Era length is tuned with a per-era `gain`** rather than new goals, so era masses (and every object size that depends on them) stay the same. Cosmic Dawn gets ×2.5 (it was ~3 minutes, now ~40 s), later eras get less than ×1 (they were over in 20–40 s once big objects became edible). Collision losses scale down with the gain so low-gain eras don't turn into a death spiral. Far Future went from 75 s to 40 s. A dev-only autopilot (`?bot`) measured the times; real players will be a bit slower, so the bot's ~6 minutes should land around 7–9 minutes for people.
 - **Quasar ignition threshold lowered** from 12% to 10% of your mass in 4 s, because the lower Quasar Era gain made ignition rarer.
+
+### Session C – The Universe Talks Back
+
+- **Civilisations start in the Galaxy Era.** Life needs heavy elements made by earlier generations of stars, so planets with people in Cosmic Dawn or First Stars would teach the wrong thing. It also means the first half of a run is about learning to eat and the second half adds moral choices.
+- **The world slows instead of pausing** while a message is up: you can keep steering (and dodge missiles), and the moment stays part of the action in a recorded clip. 9 s is enough to read ~25 words on a phone.
+- **The message card is drawn in the canvas; the EAT / SPARE buttons are HTML.** That way the clip shows exactly what the aliens said (the shareable moment) without buttons, and the buttons stay crisp and tappable.
+- **Ignoring them isn't a third option with its own reward**: the card closes and the planet becomes ordinary food. Eating it still counts as eating a civilisation, so you can't dodge the consequences by not choosing.
+- **Eating is always worth it in the moment (+8% mass, +40 Stardust) and sparing is worth it later (a boon)**, so neither choice is "correct". Consequences are about the rest of the run: eaters face fear, missiles and fleeing planets; sparers get hopeful worlds. Sparing a hostile world calls a truce (forgets one meal) instead of a gift, so there's a way back from a bad reputation.
+- **Missiles are a nuisance, not a killer** (−2.5% mass, a shove), in keeping with a family-friendly tone and short runs.
+- **Galactic News runs in every era**, with jokes in the early eras about there being no one to report yet, so the ticker teaches players to look at it before civilisations appear.
+- **Headlines are about deeds, never about real people or places** (except your chosen hometown in Feed Your Hometown, Session D).
 

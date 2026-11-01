@@ -154,6 +154,8 @@ export default class RunController {
     this.eraTime = 0;
     const era = this.era;
     s.tierUpMoment(`Era ${era.id}`, era.name);
+    s.civs?.onEraChange();
+    s.news?.push('era', { era: era.id });
     s.time.delayedCall(RUN.eraEndDelay * 1000, () => s.offerPowers(() => toast(era.blurb, 3500)));
     this.applyEra(false);
     const save = getSave();
@@ -195,6 +197,8 @@ export default class RunController {
     this.jets.forEach((j) => j.setVisible(true).setAlpha(0));
     s.tweens.add({ targets: this.jets, alpha: 0.9, duration: 300 });
     s.ui.showBanner('Quasar ignited', 'You outshine the whole galaxy', 2.2);
+    s.news?.push('quasar');
+    this.quasarCount = (this.quasarCount ?? 0) + 1;
     s.shake(EFFECTS.bigShake, EFFECTS.bigShakeTime);
     s.effects.shockwave(bh.x, bh.y, bh.radius * 10, COLORS.science, 1.2);
     audio.bassDrop(1);
@@ -325,6 +329,8 @@ export default class RunController {
     audio.setRumble(0);
     s.hud.setVisible(false);
     this.closeEraStardust();
+    this.stardustSoFar += s.civs?.extraStardust ?? 0;
+    if (s.civs) s.civs.extraStardust = 0;
     const reward = runStardust(this.stardustSoFar, completed, RUN.completeBonus);
     this.stardustSoFar = 0; // a revive keeps earning from here
     const save = getSave();
@@ -354,6 +360,7 @@ export default class RunController {
       reward,
       newCards,
       powers: s.powers?.summary(),
+      civs: s.civs?.summary(),
     });
   }
 }

@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import {
   GAME, COLORS, DEPTH, CAMERA, LEVEL, TIERS, DANGER, EFFECTS, HUD, BOSS, GROWTH, WORLD_EDGE, MILESTONES,
-  LOW_GRAPHICS, RECORDING, ADS, EATING, RUN, POWERS,
+  LOW_GRAPHICS, RECORDING, ADS, EATING, RUN, POWERS, CIVS,
 } from '../config.js';
+import { POWERS_BY_ID } from '../data/powers.js';
 import BlackHole, { radiusForMass } from '../objects/BlackHole.js';
 import Spawner from '../systems/spawner.js';
 import Effects from '../systems/effects.js';
@@ -18,6 +19,8 @@ import { createScenario } from '../systems/scenarios.js';
 import RunController from '../systems/run.js';
 import Autopilot, { autopilotEnabled, devParams } from '../systems/autopilot.js';
 import Powers from '../systems/powers.js';
+import Civs from '../systems/civs.js';
+import News from '../systems/news.js';
 import { getLevel, LEVEL_COUNT } from '../data/levels.js';
 import { getScenario } from '../data/scenarios.js';
 import Hud from '../ui/hud.js';
@@ -48,6 +51,8 @@ export default class GameScene extends Phaser.Scene {
     // Phaser reuses this scene object between games: clear anything a previous game left.
     this.run = null;
     this.powers = null;
+    this.civs = null;
+    this.news = null;
     this.rng = Math.random; // seeded for the Daily Universe
     this.scenario = null;
     this.boss = null;
@@ -164,6 +169,7 @@ export default class GameScene extends Phaser.Scene {
     if (this.mode === 'scenario') this.scenario = createScenario(this.scenarioId, this);
     if (this.mode === 'run') {
       this.powers = new Powers(this, this.rng);
+      this.civs = new Civs(this, this.rng);
       this.run = new RunController(this);
       for (const id of (devParams().get('powers') ?? '').split(',').filter(Boolean)) this.powers.take(id);
     }
@@ -187,6 +193,7 @@ export default class GameScene extends Phaser.Scene {
         onSpawn: (type) => this.spawner.spawnNear(type, this.bh),
         onTier: (t) => flow.startSandbox(t),
         onJets: () => this.powers?.fireJets(),
+        onCiv: (eat) => this.civs?.choose(eat),
       },
     });
     if (this.run) {
@@ -195,6 +202,7 @@ export default class GameScene extends Phaser.Scene {
     }
     this.scene.launch('UIScene', { mode: this.mode });
     this.ui = this.scene.get('UIScene');
+    if (this.run) this.news = new News(this.ui, this.rng);
 
     // ---- Input ----
     this.input.mouse?.disableContextMenu();
@@ -277,7 +285,7 @@ export default class GameScene extends Phaser.Scene {
 
   /** Pull range (× radius) after upgrades, quasar ignition and powers. */
   effectivePullRange() {
-    return this.pullRange * (this.powers ? this.powers.pullRangeMul() : 1);
+    return this.pullRange * (this.powers ? this.powers.pullRangeMul() : 1) * (this.civs ? 1 + this.civs.pullBonus : 1);
   }
 
   // ---------------------------------------------------------------------------
@@ -321,7 +329,10 @@ export default class GameScene extends Phaser.Scene {
       swirl: pw ? pw.swirl() : 0,
       pullStrength: pw ? pw.pullStrengthMul() : 1,
       shred: pw && !this.ended ? pw.shred() : null,
+      rivalsFlee: this.civs ? this.civs.rivalsFlee() : false,
     });
+    if (this.civs) this.civs.update(dt, realDt);
+    if (this.news && !this.ended) this.news.update(realDt, this.run.era.id);
     if (pw) {
       pw.update(dt);
       this.spawner.hiddenChance = pw.hiddenChance();
@@ -638,6 +649,7 @@ export default class GameScene extends Phaser.Scene {
         const { synergies } = pw.take(id);
         this.hud.setPowers(pw.owned(), [...pw.synergies]);
         this.scene.resume();
+        this.news?.push(synergies.length ? 'synergy' : 'power', { synergy: synergies[0]?.name, power: POWERS_BY_ID[id].name });
         if (synergies.length) {
           const syn = synergies[0];
           this.ui.showBanner('Synergy', syn.name, 2.4);
@@ -704,7 +716,12 @@ export default class GameScene extends Phaser.Scene {
       if (!this.biggest || obj.mass > this.biggest.mass) this.biggest = { name: obj.displayName ?? obj.def.name, mass: obj.mass };
     }
 
-    const big = (obj.named || ratio >= EFFECTS.bigSwallowRatio) && this.bigCooldown <= 0;
+    const big = (obj.named || obj.civ || ratio >= EFFECTS.bigSwallowRatio) && this.bigCooldown <= 0;
+    if (this.civs) {
+      this.civs.onSwallow(obj);
+      if (obj.type === 'rival') this.news?.push('rivalEaten', { rival: obj.rivalName ?? 'A rival' });
+      else if (!obj.civ && big) this.news?.push('bigSwallow', { object: `${/^[aeiou]/i.test(obj.def.name) ? 'an' : 'a'} ${(obj.displayName ?? obj.def.name).toLowerCase()}` });
+    }
     this.effects.spaghetti(obj, bh, big);
     const colors = obj.def.debris ?? [obj.def.color, COLORS.amber];
     this.effects.debris(obj.x, obj.y, colors, Math.round(EFFECTS.debrisCount * Math.min(1, 0.3 + ratio)), bh);
@@ -731,7 +748,9 @@ export default class GameScene extends Phaser.Scene {
     }
 
     // Name label: always for named objects, otherwise for big-enough meals.
-    if (obj.named) {
+    if (obj.civ) {
+      // Civs.onSwallow already labelled it.
+    } else if (obj.named) {
       this.ui.showLabel(obj.def.name, kgText(obj.realKg, 2), true);
     } else if (obj.hidden) {
       this.ui.showLabel(`Hidden ${obj.displayName ?? obj.def.name}`, `+${kgText(Math.max(0, this.currentKg() - kgBefore), 1)} · ×${POWERS.lens.hiddenStardust} SD`, false);
@@ -790,7 +809,10 @@ export default class GameScene extends Phaser.Scene {
     this.invulnerable = DANGER.invulnerableTime;
     audio.collide();
     this.shake(DANGER.shake, DANGER.shakeTime);
-    if (obj.radius > bh.radius) {
+    if (obj.radius > bh.radius && this.civs?.absorbHit()) {
+      this.effects.flash(bh.x - nx * bh.radius, bh.y - ny * bh.radius, bh.radius * 1.5, COLORS.science, 0.3);
+      this.ui.showLabel('Deflected', 'Gift from a spared world', false);
+    } else if (obj.radius > bh.radius) {
       // In runs, a hit costs the same number of meals in every era (eras with a low gain lose less).
       let loss = bh.mass * upgrades.massLoss() * (this.run ? Math.min(1, this.run.era.gain ?? 1) : 1);
       if (this.powers) loss = this.powers.onHitLoss(loss);
@@ -800,6 +822,24 @@ export default class GameScene extends Phaser.Scene {
       this.effects.flash(bh.x - nx * bh.radius, bh.y - ny * bh.radius, bh.radius * 1.5, COLORS.danger, 0.3);
       if (loss > 0) this.ui.showLabel(`Hit ${obj.def.name}`, `−${kgText(Math.max(0, kgBefore - this.currentKg()), 1)}`, false, true);
     }
+  }
+
+  /** A hostile civilisation's missile hit you: a shove and a little mass. */
+  onMissileHit(nx, ny, from) {
+    const bh = this.bh;
+    const scale = bh.radius / GROWTH.baseRadius;
+    bh.velocity.x += nx * CIVS.missiles.knock * scale;
+    bh.velocity.y += ny * CIVS.missiles.knock * scale;
+    this.effects.flash(bh.x, bh.y, bh.radius * 1.6, COLORS.danger, 0.3);
+    this.shake(DANGER.shake * 0.6, DANGER.shakeTime);
+    audio.collide();
+    if (this.invulnerable > 0) return;
+    let loss = this.civs.missileLoss(bh.mass);
+    if (loss > 0 && this.powers) loss = this.powers.onHitLoss(loss);
+    const kgBefore = this.currentKg();
+    bh.setMass(Math.max(this.startMass * GROWTH.minMassFactor, bh.mass - loss));
+    this.ui.showLabel(loss > 0 ? 'Missile hit' : 'Deflected', loss > 0 ? `−${kgText(Math.max(0, kgBefore - this.currentKg()), 1)}` : 'Gift from a spared world', false, loss > 0);
+    if (loss > 0 && Math.random() < 0.4) this.news?.push('missileHit', { species: from?.species?.name ?? 'Angry' });
   }
 
   onPlayerEaten(rival) {
@@ -818,6 +858,7 @@ export default class GameScene extends Phaser.Scene {
     for (const m of MILESTONES) {
       if (this.lastKg < m.kg && kg >= m.kg) {
         this.ui.showMilestone(m.label);
+        this.news?.push('milestone', { words: m.label.toLowerCase() });
         this.hud.flashMass();
         audio.chime();
       }

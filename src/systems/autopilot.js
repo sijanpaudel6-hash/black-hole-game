@@ -6,7 +6,7 @@
 // It steers toward the best nearby meal (mass ÷ distance), away from anything that would
 // hurt it, and lets GameScene's choice screens pick for it (see GameScene.autoChoose).
 
-import { EATING, DANGER } from '../config.js';
+import { EATING, DANGER, CIVS } from '../config.js';
 
 /** Testing switches, only in dev / bot builds: ?era=3 starts a run at era 3, ?powers=jets,lens grants powers. */
 export function devParams() {
@@ -37,6 +37,8 @@ export default class Autopilot {
   target(dt) {
     const s = this.scene;
     const bh = s.bh;
+    // Answer civilisations after a beat, at random.
+    if (s.civs?.choice && s.civs.choice.time < CIVS.choiceTime - 1.2) s.civs.choose(Math.random() < 0.5);
     this.think -= dt;
     if (this.think <= 0) {
       this.think = 0.12;

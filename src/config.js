@@ -348,6 +348,60 @@ export const POWERS = {
 };
 
 // ---------------------------------------------------------------------------
+// The Universe Talks Back: civilisations (runs only). Words in src/data/civilisations.js.
+// ---------------------------------------------------------------------------
+export const CIVS = {
+  eras: [3, 4, 5], // eras with civilisations (life needs the heavy elements earlier stars made)
+  firstDelay: 10, // seconds into an era before the first one appears
+  interval: [20, 30], // seconds between civilisations (after the last one is dealt with)
+  sizeRatio: [0.5, 0.68], // planet radius × yours when it appears (always edible)
+  eatMass: 0.08, // eating one adds this share of your current mass
+  eatStardust: 40, // Stardust bonus for eating one...
+  spareStardust: 0, // ...and for sparing one (sparing gives a boon instead)
+  hailRange: 6, // they hail you when your edge is within this × your radius of theirs
+  choiceTime: 9, // real seconds to decide before the message closes
+  slowMo: 0.35, // world speed while you read
+  types: { 3: ['rockyPlanet', 'moon', 'dwarfPlanet'], 4: ['rockyPlanet', 'gasGiant', 'moon'], 5: ['rockyPlanet', 'dwarfPlanet'] },
+  techWeights: {
+    3: { tribal: 3, industrial: 3, spacefaring: 2 },
+    4: { industrial: 1, spacefaring: 3, empire: 2, ancient: 1 },
+    5: { spacefaring: 1, empire: 2, ancient: 3 },
+  },
+  // Reputation: every civilisation you eat makes the next ones more scared, hostile or
+  // likely to flee; every one you spare makes them hopeful.
+  terrifiedPerEat: 1.2, // mood weight added per civilisation eaten
+  hostilePerEat: 1.0,
+  hopefulPerSpare: 1.4,
+  fleeChancePerEat: 0.1, // chance a civilisation just runs away (max fleeChanceMax)
+  fleeChanceMax: 0.4,
+  fleeSpeed: 2.6, // own radii per second
+  eatPull: 2.2, // EAT: the planet is hauled in at this × your radius per second
+  // Hostile civilisations fire missiles at you.
+  missiles: { count: 4, every: 1.1, speed: 430, turn: 2.2, life: 4.5, massLoss: 0.025, knock: 260, size: 0.22 },
+  // What sparing one gives (see BOONS in src/data/civilisations.js).
+  boons: {
+    weights: { map: 3, neutron: 2, shield: 2, fuel: 3, stardust: 2, gravity: 2, escort: 1 },
+    fuel: 0.06, // + share of your mass
+    shieldHits: 2,
+    gravity: 0.15, // + × pull range for the rest of the run
+    escort: 40, // seconds rivals keep away
+    stardust: 60,
+    feastCount: 14, // star map: this many meals...
+    feastDistance: 1.4, // ...this × the view's half-diagonal away
+    neutronMass: 0.14, // hidden neutron star: eating it adds this share of your mass
+    pointerTime: 30, // seconds the scanner arrow points at a gift
+  },
+};
+
+// Galactic News ticker (headlines in src/data/news.js).
+export const NEWS = {
+  showTime: 6.5, // seconds per headline (long ones scroll)
+  scrollSpeed: 110, // design px/s for long headlines
+  fillerEvery: [28, 40], // seconds of quiet before a filler headline
+  maxQueue: 3,
+};
+
+// ---------------------------------------------------------------------------
 // Objects
 // ---------------------------------------------------------------------------
 // mass: game mass (SPEC.md). radius: world px, chosen so each object becomes edible at a
@@ -455,6 +509,11 @@ export const OBJECTS = {
   whiteDwarf: {
     name: 'White dwarf', mass: 6000, radius: 240, behaviour: 'drift',
     drift: [0.03, 0.08], spin: [0, 0], color: 0xdfe8ff, texRadius: 56, glow: true,
+  },
+  // A super-dense dead star, revealed by spared civilisations: small, but a huge meal (mass set when made).
+  neutronStar: {
+    name: 'Neutron star', mass: 1, radius: 10, behaviour: 'drift',
+    drift: [0.2, 0.4], spin: [4, 6], color: 0xcfe4ff, texRadius: 40, glow: true,
   },
   // Chunks of something shattered by jets, the shredder or a cosmic event (size and mass set when made).
   fragment: {
