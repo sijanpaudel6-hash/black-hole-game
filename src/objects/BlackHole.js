@@ -1,78 +1,132 @@
 import Phaser from 'phaser';
-import { BLACK_HOLE, DEPTH, GROWTH, MOVEMENT, WORLD } from '../config.js';
+import { BLACK_HOLE, DEPTH, DISK, GROWTH, MOVEMENT } from '../config.js';
 
 // Growth formula from SPEC.md: radius = baseRadius × (mass ÷ baseMass)^(1/3).
 export function radiusForMass(mass) {
-  return GROWTH.baseRadius * Math.pow(mass / GROWTH.baseMass, GROWTH.exponent);
+  return GROWTH.baseRadius * Math.pow(Math.max(mass, 1e-6) / GROWTH.baseMass, GROWTH.exponent);
 }
 
+const R0 = GROWTH.baseRadius; // everything is drawn at this radius, then the container is scaled
+
 /**
- * The player's black hole: a pure black disc with a thin bright photon ring.
- * Movement is steering-based: it accelerates toward a desired velocity and
- * drifts to a stop with friction when there is no input.
+ * A black hole: pure black disc, thin bright photon ring, tilted rotating amber
+ * accretion disk and a soft glow. Used for the player, the title screen art and
+ * the Sagittarius A* boss.
  *
- * `radius` is the true size used for eating rules; `drawnRadius` eases toward
- * it so growth looks smooth instead of popping.
+ * Movement is steering-based: it accelerates toward a desired velocity and drifts
+ * to a stop with friction when there is no input.
+ *
+ * `radius` is the true size used for the rules; `drawnRadius` eases toward it.
  */
 export default class BlackHole extends Phaser.GameObjects.Container {
-  constructor(scene, x, y, mass = GROWTH.baseMass) {
+  constructor(scene, x, y, mass = GROWTH.baseMass, opts = {}) {
     super(scene, x, y);
     this.mass = mass;
     this.radius = radiusForMass(mass);
     this.drawnRadius = this.radius;
     this.velocity = new Phaser.Math.Vector2(0, 0);
+    this.diskBoost = 0;
+    this.opts = opts;
 
-    this.gfx = scene.add.graphics();
-    this.add(this.gfx);
-    this.redraw();
+    // Soft amber bloom
+    this.glow = scene.add.image(0, 0, 'glow').setBlendMode(Phaser.BlendModes.ADD).setTint(opts.glowColor ?? BLACK_HOLE.haloColor);
+    this.glow.setScale((DISK.glowRadius * R0) / 128).setAlpha(DISK.glowAlpha * (opts.glowScale ?? 1));
 
-    this.setDepth(DEPTH.blackHole);
+    // Back of the tilted disk: the inner image spins, the outer container squashes it.
+    this.diskImage = scene.add.image(0, 0, 'disk').setBlendMode(Phaser.BlendModes.ADD).setScale(R0 / 100);
+    if (opts.diskTint) this.diskImage.setTint(opts.diskTint);
+    this.diskBack = scene.add.container(0, 0, [this.diskImage]);
+    this.diskBack.setScale(1, DISK.tilt).setRotation(DISK.angle);
+
+    // Event horizon and photon ring
+    this.disc = scene.add.graphics();
+    this.drawDisc(opts.ringColor ?? BLACK_HOLE.photonRingColor);
+
+    // Near half of the disk, passing in front of the disc.
+    this.diskFront = scene.add.image(0, 0, 'diskFront').setBlendMode(Phaser.BlendModes.ADD);
+    if (opts.diskTint) this.diskFront.setTint(opts.diskTint);
+    this.diskFront.setScale(R0 / 100, (R0 / 100) * DISK.tilt);
+    // Rotate the front half by the same roll as the back container.
+    this.diskFrontHolder = scene.add.container(0, 0, [this.diskFront]).setRotation(DISK.angle);
+
+    this.add([this.glow, this.diskBack, this.disc, this.diskFrontHolder]);
+    this.setDepth(opts.depth ?? DEPTH.blackHole);
+    this.applyScale();
+    this.setDiskAlpha();
     scene.add.existing(this);
   }
 
-  addMass(amount) {
-    this.mass += amount;
-    this.radius = radiusForMass(this.mass);
-  }
-
-  // Max speed shrinks slightly as the black hole grows, so big feels heavy.
-  get maxSpeed() {
-    const factor = Math.pow(this.radius / GROWTH.baseRadius, -MOVEMENT.sizeSpeedExponent);
-    return MOVEMENT.maxSpeed * Math.max(MOVEMENT.minSpeedFactor, Math.min(1, factor));
-  }
-
-  // Ease the drawn size toward the true size; only redraw when it visibly changes.
-  updateSize(dt) {
-    const diff = this.radius - this.drawnRadius;
-    if (Math.abs(diff) < 0.01) return;
-    this.drawnRadius += diff * (1 - Math.exp(-GROWTH.radiusEase * dt));
-    if (Math.abs(this.radius - this.drawnRadius) < 0.05) this.drawnRadius = this.radius;
-    this.redraw();
-  }
-
-  redraw() {
-    const r = this.drawnRadius;
-    const g = this.gfx;
+  drawDisc(ringColor) {
+    const g = this.disc;
     g.clear();
-    // Faint glow just outside the ring.
     g.lineStyle(BLACK_HOLE.haloWidth, BLACK_HOLE.haloColor, BLACK_HOLE.haloAlpha);
-    g.strokeCircle(0, 0, r + BLACK_HOLE.photonRingWidth / 2 + BLACK_HOLE.haloWidth / 2);
-    // Event horizon: pure black, hides the stars behind it.
+    g.strokeCircle(0, 0, R0 + BLACK_HOLE.photonRingWidth / 2 + BLACK_HOLE.haloWidth / 2);
     g.fillStyle(0x000000, 1);
-    g.fillCircle(0, 0, r);
-    // Photon ring.
-    g.lineStyle(BLACK_HOLE.photonRingWidth, BLACK_HOLE.photonRingColor, 1);
-    g.strokeCircle(0, 0, r);
+    g.fillCircle(0, 0, R0);
+    g.lineStyle(BLACK_HOLE.photonRingWidth, ringColor, 1);
+    g.strokeCircle(0, 0, R0);
+  }
+
+  setLowGraphics(low) {
+    this.glow.setVisible(!low);
+  }
+
+  setMass(mass) {
+    this.mass = mass;
+    this.radius = radiusForMass(mass);
+  }
+
+  addMass(amount) {
+    this.setMass(this.mass + amount);
+  }
+
+  snapSize() {
+    this.drawnRadius = this.radius;
+    this.applyScale();
+  }
+
+  boostDisk(amount = DISK.eatBoost) {
+    this.diskBoost = Math.min(DISK.maxBoost, this.diskBoost + amount);
+  }
+
+  applyScale() {
+    this.setScale(this.drawnRadius / R0);
+  }
+
+  setDiskAlpha() {
+    const a = Math.min(1, DISK.alpha + this.diskBoost);
+    this.diskImage.setAlpha(a);
+    this.diskFront.setAlpha(a);
+    if (this.glow.visible) this.glow.setAlpha(DISK.glowAlpha * (this.opts.glowScale ?? 1) * (1 + this.diskBoost));
+  }
+
+  /** Visual update: ease size, spin disk, fade eating glow. */
+  updateVisual(dt) {
+    const diff = this.radius - this.drawnRadius;
+    if (Math.abs(diff) > 1e-4 * this.radius) {
+      this.drawnRadius += diff * (1 - Math.exp(-GROWTH.radiusEase * dt));
+      this.applyScale();
+    }
+    this.diskImage.rotation += DISK.spin * dt * (this.opts.spinScale ?? 1);
+    if (this.diskBoost > 0) this.diskBoost = Math.max(0, this.diskBoost - DISK.boostDecay * dt * this.diskBoost - 0.05 * dt);
+    this.setDiskAlpha();
   }
 
   /**
-   * @param {number} dt seconds since last frame
-   * @param {{x:number,y:number}|null} target world point to move toward (pointer held)
-   * @param {{x:number,y:number}|null} direction direction to move in (keyboard)
+   * Steer toward the held pointer or keyboard direction.
+   * @param {number} dt seconds
+   * @param {{x:number,y:number}|null} target world point (pointer held)
+   * @param {{x:number,y:number}|null} direction keyboard direction
+   * @param {{speedMultiplier?:number, startRadius?:number}} params
    */
-  move(dt, target, direction) {
+  move(dt, target, direction, params = {}) {
     const v = this.velocity;
-    const maxSpeed = this.maxSpeed;
+    const scale = this.radius / GROWTH.baseRadius; // screen px → world px
+    const heavy = Math.pow(this.radius / (params.startRadius ?? this.radius), -MOVEMENT.sizeSpeedExponent);
+    const maxSpeed = MOVEMENT.maxSpeed * scale * (params.speedMultiplier ?? 1) * Phaser.Math.Clamp(heavy, MOVEMENT.minSpeedFactor, 1);
+    const accel = MOVEMENT.acceleration * scale * (params.speedMultiplier ?? 1);
+    this.maxSpeed = maxSpeed;
+
     let desiredX = 0;
     let desiredY = 0;
     let steering = false;
@@ -82,9 +136,9 @@ export default class BlackHole extends Phaser.GameObjects.Container {
       const dx = target.x - this.x;
       const dy = target.y - this.y;
       const dist = Math.hypot(dx, dy);
-      if (dist > MOVEMENT.deadZone) {
-        // Full speed when far away, easing off as it arrives so it never overshoots.
-        const speed = maxSpeed * Math.min(1, (dist - MOVEMENT.deadZone) / MOVEMENT.arriveRadius);
+      const dead = MOVEMENT.deadZone * scale;
+      if (dist > dead) {
+        const speed = maxSpeed * Math.min(1, (dist - dead) / (MOVEMENT.arriveRadius * scale));
         desiredX = (dx / dist) * speed;
         desiredY = (dy / dist) * speed;
       }
@@ -96,11 +150,10 @@ export default class BlackHole extends Phaser.GameObjects.Container {
     }
 
     if (steering) {
-      // Turn the velocity toward the desired velocity, limited by acceleration.
       let ax = desiredX - v.x;
       let ay = desiredY - v.y;
       const change = Math.hypot(ax, ay);
-      const maxChange = MOVEMENT.acceleration * dt;
+      const maxChange = accel * dt;
       if (change > maxChange) {
         ax = (ax / change) * maxChange;
         ay = (ay / change) * maxChange;
@@ -108,22 +161,19 @@ export default class BlackHole extends Phaser.GameObjects.Container {
       v.x += ax;
       v.y += ay;
     } else {
-      // No input: drift and slow down.
       const decay = Math.exp(-MOVEMENT.friction * dt);
       v.x *= decay;
       v.y *= decay;
-      if (v.length() < MOVEMENT.stopSpeed) v.set(0, 0);
+      if (v.length() < MOVEMENT.stopSpeed * scale) v.set(0, 0);
     }
 
     this.x += v.x * dt;
     this.y += v.y * dt;
-    this.keepInsideWorld();
-    this.updateSize(dt);
   }
 
   // Stop at the edge of the circular play area, keeping any sliding motion along it.
-  keepInsideWorld() {
-    const limit = WORLD.radius - this.radius;
+  keepInsideWorld(worldRadius) {
+    const limit = worldRadius - this.radius;
     const dist = Math.hypot(this.x, this.y);
     if (dist <= limit) return;
     const nx = this.x / dist;
