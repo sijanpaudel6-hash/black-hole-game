@@ -744,6 +744,7 @@ export default class GameScene extends Phaser.Scene {
     const realDelay = delay * 1000;
     this.time.delayedCall(realDelay, () => {
       this.ui.fade(1, 0.6);
+      if (!this.recorder?.recording) this.hud.setVisible(false);
       this.time.delayedCall(700, () => {
         this.ui.showFact(def.fact, RECORDING.factTime);
         this.time.delayedCall(RECORDING.factTime * 1000 + 600, () => {

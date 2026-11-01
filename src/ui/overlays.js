@@ -77,7 +77,7 @@ export function renderLevelComplete(p) {
         <div class="end-actions">
           <button class="btn-primary split" data-act="next"><span>${finale ? 'Star chart' : 'Next level'}</span>${ICONS.arrow}</button>
           ${p.canDouble ? `<button class="btn-secondary" data-act="double">${ICONS.play} ×2 Stardust · Watch ad</button>` : ''}
-          <button class="btn-text" data-act="levels" style="align-self:center">[ Star chart ]</button>
+          ${finale ? '' : '<button class="btn-text" data-act="levels" style="align-self:center">[ Star chart ]</button>'}
         </div>
       </div>
     </div>`,

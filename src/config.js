@@ -182,7 +182,7 @@ export const TIERS = [
   },
   {
     id: 5, name: 'Galaxy Eater', startMass: 100000,
-    weights: { rockyPlanet: 15, gasGiant: 20, redDwarf: 15, sunLikeStar: 10, giantStar: 10, starCluster: 15, rival: 10, clusterStar: 5 },
+    weights: { gasGiant: 15, redDwarf: 15, sunLikeStar: 15, giantStar: 15, clusterStar: 10, starCluster: 20, rival: 10 },
   },
 ];
 
@@ -201,9 +201,9 @@ export const LEVELS = [
   { tier: 4, target: 20000 },
   { tier: 4, target: 45000 },
   { tier: 4, target: 100000 },
-  { tier: 5, target: 200000 },
-  { tier: 5, target: 450000 },
-  { tier: 5, target: 1000000, boss: true },
+  { tier: 5, target: 180000 },
+  { tier: 5, target: 300000 },
+  { tier: 5, target: 500000, boss: true },
 ];
 
 export const SANDBOX_UNLOCK_LEVEL = 3; // sandbox opens after clearing this level

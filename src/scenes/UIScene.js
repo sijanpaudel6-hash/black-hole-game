@@ -32,7 +32,7 @@ export default class UIScene extends Phaser.Scene {
     this.bannerTitle.setLetterSpacing(5).setStroke(COLORS.voidCss, 10);
     this.bannerSub = this.text(W / 2, H * 0.31 + 62, '', HUD.fontMono, 24, COLORS.amberCss).setOrigin(0.5).setAlpha(0).setDepth(20);
     this.bannerSub.setLetterSpacing(3).setStroke(COLORS.voidCss, 6);
-    this.caption = this.text(W / 2, H * 0.25, '', HUD.fontHead, 66, COLORS.textCss, { align: 'center', wordWrap: { width: 560 } })
+    this.caption = this.text(W / 2, H * 0.36, '', HUD.fontHead, 66, COLORS.textCss, { align: 'center', wordWrap: { width: 560 } })
       .setOrigin(0.5)
       .setAlpha(0)
       .setDepth(21);
@@ -121,7 +121,7 @@ export default class UIScene extends Phaser.Scene {
     // Reuse the oldest if three are showing.
     let l = this.labels.find((x) => !x.alive);
     if (!l) {
-      if (this.labels.length < 3) {
+      if (this.labels.length < 2) {
         const bg = this.add.graphics();
         const t1 = this.text(24, 16, '', HUD.fontHead, 30, COLORS.amberCss);
         t1.setLetterSpacing(2).setFontStyle('');
@@ -213,7 +213,9 @@ export default class UIScene extends Phaser.Scene {
       const a = age < 0.15 ? age / 0.15 : age > l.life - 0.3 ? (l.life - age) / 0.3 : 1;
       l.c.setAlpha(a).setScale(0.9 + 0.1 * Math.min(1, age / 0.15));
       const x = Phaser.Math.Clamp(bx + br + 24, 70, W - 70 - l.w);
-      const y = Phaser.Math.Clamp(by - br - 110 - l.slot * 104, H * 0.26, H * 0.78);
+      // Newest label just above the black hole, the older one stacked above it; both stay
+      // below the recording mass panel.
+      const y = Phaser.Math.Clamp(by - br - 110, H * 0.28 + 104, H * 0.78) - l.slot * 104;
       l.c.setPosition(x, y);
     }
   }

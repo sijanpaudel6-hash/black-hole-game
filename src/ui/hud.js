@@ -47,13 +47,15 @@ export default class Hud {
               <div class="value"></div>
               ${mode === 'level' ? '<div class="progress"><b></b></div><div class="ticks">' + '<i></i>'.repeat(11) + '</div>' : ''}
             </div>
-            ${mode === 'level' ? '<div class="panel hud-time"><div class="label">Time left</div><div class="value"></div></div>' : ''}
+            <div class="hud-right">
+              ${mode === 'level' ? '<div class="panel hud-time"><div class="label">Time left</div><div class="value"></div></div>' : ''}
+              ${canRecord ? `<button class="hud-btn chamfer rec" data-act="record" aria-label="Record clip">${ICONS.record}</button>` : ''}
+            </div>
           </div>
           ${tray}
           <div class="hud-bottom">
             ${tierPanel}
             <div class="hud-buttons">
-              ${canRecord ? `<button class="hud-btn chamfer rec" data-act="record" aria-label="Record clip">${ICONS.record}</button>` : ''}
               <button class="hud-btn chamfer" data-act="pause" aria-label="Pause">${ICONS.pause}</button>
             </div>
           </div>

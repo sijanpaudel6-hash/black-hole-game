@@ -187,9 +187,11 @@ const SCRIPTS = {
         if (done) return { controlled: true };
         rival.updateVisual(dt);
         t += dt;
-        const frac = Math.min(0.999, t / T);
-        // Inspiral like the real thing: separation ∝ (time left)^(1/4), faster orbits as it shrinks.
-        const sep = s0 * (1 - frac) ** 0.25;
+        const frac = Math.min(1, t / T);
+        // Inspiral like the real thing: separation ∝ (time left)^(1/4), faster orbits as it
+        // shrinks, reaching contact exactly at time T.
+        const contact = (bh.radius + rival.radius) * 0.8;
+        const sep = contact + (s0 - contact) * (1 - frac) ** 0.25;
         const omega = Math.min(14, 0.7 * (s0 / sep) ** 1.5);
         angle += omega * dt;
         place(sep);
@@ -200,7 +202,7 @@ const SCRIPTS = {
           scene.effects.shockwave(0, 0, sep * 2.4, COLORS.science, 1.6);
           audio.blip(180 + 900 * (1 - sep / s0), 0.05);
         }
-        if (sep < (bh.radius + rival.radius) * 0.7) {
+        if (frac >= 1) {
           done = true;
           rival.destroy();
           bh.setPosition(0, 0);
