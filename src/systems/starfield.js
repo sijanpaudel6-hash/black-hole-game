@@ -23,6 +23,11 @@ export default class Starfield {
     this.setLow(low);
   }
 
+  /** Overall star brightness (0–1): eras fade the stars in and out. */
+  setAlpha(a) {
+    this.layers.forEach((l) => l.sprite.setAlpha(a));
+  }
+
   setLow(low) {
     this.layers.forEach((l, i) => l.sprite.setVisible(!low || i < LOW_GRAPHICS.starLayers));
   }

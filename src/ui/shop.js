@@ -15,6 +15,7 @@ const pad2 = (n) => String(n).padStart(2, '0');
  * @param {object} p
  * @param {number} [p.nextLevel] level to launch from here
  * @param {() => void} p.onBack
+ * @param {string} [p.launchLabel] launch button text (runs)
  * @param {(n:number) => void} p.onLaunch
  */
 export function renderShop(p) {
@@ -60,7 +61,7 @@ export function renderShop(p) {
         ${cards}
         <div class="shop-footer">
           ${freeAvail ? `<button class="btn-secondary" data-act="free" ${freeMode ? 'disabled' : ''}>${ICONS.play} ${freeMode ? 'Pick a free upgrade' : 'Free upgrade · Watch ad'}</button>` : ''}
-          ${p.nextLevel ? `<button class="btn-primary split" data-act="launch"><span>Launch sector ${pad2(p.nextLevel)}</span>${ICONS.arrow}</button>` : ''}
+          ${p.launchLabel || p.nextLevel ? `<button class="btn-primary split" data-act="launch"><span>${p.launchLabel ?? `Launch sector ${pad2(p.nextLevel)}`}</span>${ICONS.arrow}</button>` : ''}
         </div>
       </div>`,
     );

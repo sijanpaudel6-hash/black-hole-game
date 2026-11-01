@@ -31,6 +31,12 @@ export function goShop(data = {}) {
   switchTo('ShopScene', data);
 }
 
+/** The main mode: one life of a black hole, through five eras. */
+export function startRun() {
+  switchTo('GameScene', { mode: 'run' });
+}
+
+/** Classic mode: one of the 15 fixed levels. */
 export function startLevel(level) {
   switchTo('GameScene', { mode: 'level', level });
 }

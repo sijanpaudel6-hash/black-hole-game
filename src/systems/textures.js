@@ -299,6 +299,15 @@ const DRAW = {
   star(ctx, c, R, color) {
     starBody(ctx, c, c, R, color);
   },
+  gas(ctx, c, R, color) {
+    // Soft, lumpy cloud of glowing gas.
+    for (let i = 0; i < 7; i++) {
+      const a = rand(0, TAU);
+      const d = rand(0, R * 0.45);
+      glow(ctx, c + Math.cos(a) * d, c + Math.sin(a) * d, 0, R * rand(0.45, 0.6), lighten(color, rand(0, 0.25)), rand(0.35, 0.6));
+    }
+    glow(ctx, c, c, 0, R * 0.35, lighten(color, 0.5), 0.6);
+  },
   starCluster(ctx, c, R, color) {
     glow(ctx, c, c, 0, R, color, 0.25);
     for (let i = 0; i < 18; i++) {
@@ -429,6 +438,7 @@ function layoutFor(type, def) {
 
 function drawerFor(type, def) {
   if (DRAW[type]) return DRAW[type];
+  if (def.gas) return DRAW.gas;
   if (def.glow) return DRAW.star;
   if (type === 'theMoon' || type === 'mercury') return DRAW.moon;
   return DRAW.rockyPlanet;

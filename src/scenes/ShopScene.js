@@ -23,6 +23,10 @@ export default class ShopScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(COLORS.void);
     this.starfield = new Starfield(this, getSave().settings.lowGraphics);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => clear('screen'));
+    if (this.from === 'run' || this.from === 'title') {
+      renderShop({ launchLabel: 'Start a new run', onBack: () => flow.goMenu('title'), onLaunch: () => flow.startRun() });
+      return;
+    }
     renderShop({
       nextLevel: this.nextLevel,
       onBack: () => flow.goMenu('levels', this.nextLevel ? { selected: this.nextLevel } : {}),

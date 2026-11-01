@@ -1,10 +1,10 @@
 # Black Hole: Event Horizon — Game Spec
 
-Nov 1, 2026 · Sijan Paudel
+Nov 1, 2026 · Sijan Paudel · **Updated after Session A to match the game as built**
 
 ## Overview
 
-**You are a newborn black hole. Drag to move, swallow anything smaller than you, and grow from eating dust to eating galaxies.** Sessions are short (2–5 minutes per level), satisfying to watch, and lightly educational.
+**You are a newborn black hole. Drag to move, swallow anything smaller than you, and grow from eating gas in the dawn of time to outliving every star.** The main mode is a run: one black hole's life through five eras of cosmic history, 10–15 minutes long. Satisfying to watch, and lightly educational.
 
 | Item | Decision |
 | --- | --- |
@@ -13,8 +13,16 @@ Nov 1, 2026 · Sijan Paudel
 | Engine | Phaser 3 (JavaScript), WebGL renderer, 2D with glow effects |
 | Build tool | Vite |
 | Language | JavaScript (ES modules); no TypeScript for the prototype |
-| Art style | Dark space, glowing orange-purple accretion disk, simple shapes and free assets |
+| Art style | Dark space, glowing amber accretion disk, shapes drawn in code |
 | Target device | Runs at 60 fps on a low-end Android phone and loads in under 5 s |
+
+**Modes:**
+
+| Mode | What it is |
+| --- | --- |
+| **Run** (main, the PLAY button) | "One Life of a Black Hole": one continuous run through five eras, Cosmic Dawn → Far Future. No timer. |
+| **Classic** | The original 15 fixed levels in 5 tiers, each with a 3-minute timer and a target mass, ending with the Sagittarius A* boss. |
+| **Sandbox** | No timer, no danger, spawn any unlocked object, eat big things from the inside. Includes the "What if…?" scenarios. |
 
 **Rules for every Claude Code session** (paste this doc at the start):
 
@@ -23,254 +31,227 @@ Nov 1, 2026 · Sijan Paudel
 3. Commit working code to GitHub at the end of the session with a clear message.
 4. Keep it playable after every session; never leave the game broken.
 5. If something in this spec is unclear, ask before guessing. For anything visual, follow `design/DESIGN.md` and the images in `design/screens/`.
+6. **This spec describes the game as built.** Numbers marked *(tuned)* were changed on purpose after playtesting; don't revert them to older values. If you change how the game works, update this file in the same commit.
 
 ## Controls and camera
 
 **One input for everything: the black hole moves toward your finger or mouse.**
 
-- **Touch / mouse held down**: the black hole accelerates toward the pointer position; releasing lets it drift and slow down.
-- **Keyboard (desktop, optional)**: WASD or arrow keys move it in that direction.
-- **Movement feel**: smooth acceleration and friction, never instant snapping. Max speed shrinks slightly as the black hole grows, so big feels heavy.
-- **Camera**: always centred on the black hole, with slight lag for smoothness.
-- **Zoom**: the camera zooms out smoothly as the black hole grows, so its on-screen size stays roughly constant (about 8% of screen width). Each new tier triggers a short, dramatic zoom-out.
-- **Pause**: button in the top-right corner; the browser tab losing focus also pauses.
+- **Touch / mouse held down**: the black hole accelerates toward the pointer; releasing lets it drift and slow down.
+- **Keyboard (desktop)**: WASD or arrow keys move it; Esc or P pauses.
+- **Movement feel**: smooth acceleration and friction, never instant snapping. Max speed shrinks slightly as the black hole grows within a level or era (doubling the radius ≈ 10% slower), so big feels heavy.
+- **Camera**: centred on the black hole with a slight, frame-rate-independent lag.
+- **Zoom**: the camera zooms out smoothly as the black hole grows, so its on-screen size stays constant (about 8% of screen width). Each tier-up / era change triggers a short, dramatic zoom-out with slow motion.
+- **Pause**: button in the bottom-right corner (as in the HUD mockup); the browser tab losing focus also pauses. The clip-record button sits in the top-right corner.
 
-## Core loop
+## Growth and eating (all modes)
 
-**Eat → grow → reach the level goal → spend mass on upgrades → start the next level stronger.**
+- **Growth formula**: radius = baseRadius × (mass ÷ baseMass)^(1/3), baseRadius 28 px at baseMass 20. Doubling mass grows the radius by about 26%.
+- **Swallow rule**: an object is edible if its radius is below 90% of the black hole's radius. It is swallowed when its centre crosses the black hole's edge.
+- **Mass gain** *(tuned)*: swallowing adds **30% of the object's mass value** (`EATING.massGain = 0.3`). At 100% every level was over in 5–20 seconds; 0.3 makes levels and eras last minutes. Scenarios add the full mass of named objects.
+- **Pull zone**: edible objects within 3× the black hole's radius (more with Gravity Pull) accelerate toward it, faster the closer they are, and get dragged along so they fall in instead of slingshotting.
+- **Bigger objects** (radius larger than yours) have a thin red ring. Touching one bounces you off and costs 10% of current mass (less with Hawking Shield), then 0.9 s of protection. Collisions can't push you below 50% of the level/era starting mass.
+- Objects too big to eat but not bigger than you just bounce you, with no mass loss.
+- **Mass display**: the counter shows kilograms. Game mass maps to kg by log-interpolating between anchors (`MASS_SCALE`): 300 ≈ the Moon, 1,000 ≈ Earth, 3,000 ≈ Jupiter, 10,000 ≈ the Sun. Milestones flash at 1 Moon, Earth, Jupiter and Sun mass, then 10, 1,000 and 1 million Suns. It's a game scale, not physics.
 
-1. A level starts with the black hole at the size its tier begins with, surrounded by objects in a large circular play area.
-2. The player swallows smaller objects; each adds mass. Mass sets the black hole's radius.
-3. Objects bigger than the player are dangerous: touching one bounces the black hole away and costs 10% of current mass.
-4. The level ends when the player reaches the target mass (win) or the timer runs out (fail). Timer: 3 minutes in the prototype.
-5. On win, mass eaten this level converts into **Stardust**, the upgrade currency. On fail, the player keeps half the Stardust.
-6. Between levels, the player buys upgrades, then starts the next level.
-7. Clearing the last level of a tier unlocks the next tier: a bigger starting size, bigger objects, and a new science card.
+## Run mode: One Life of a Black Hole
 
-Growth formula (keep in `config.js`): radius = baseRadius × (mass ÷ baseMass)^(1/3). Cube root means doubling mass grows the radius by about 26%, which keeps growth steady rather than explosive.
+**One run is one black hole's life, from the early universe to the far future.** Each era has a mass goal: the next era's starting mass. Reaching it triggers the tier-up moment (slow motion, zoom-out, shockwave, bass drop, banner) and the next era's objects take over. The HUD shows mass with a "Next era" bar, the cosmic age, and the current era with a five-step meter.
 
-## Size tiers
+| Era | Start mass → goal | Situation | Cosmic age shown |
+| --- | --- | --- | --- |
+| 1. Cosmic Dawn | 20 → 100 | A primordial black hole in a fog of gas. **Hawking evaporation**: you lose mass unless you keep eating. Stars are faint. | 50 → 200 million years |
+| 2. First Stars | 100 → 1,000 | Protostars and young stars light up the dark; blue giants are dangerous. | 200 million → 1 billion |
+| 3. Galaxy Era | 1,000 → 10,000 | Named rival black holes compete for the same food: outgrow them or flee. | 1 → 3 billion |
+| 4. Quasar Era | 10,000 → 100,000 | Food is everywhere (1.4× objects). Feed fast enough to **ignite as a quasar**. | 3 → 13.8 billion |
+| 5. Far Future | 100,000 → (75 s) | The stars are dying: eaten objects stop coming back, the stars fade out, gentle evaporation. Ends with **the last light**. | 10¹⁴ → 10¹⁰⁰ years |
 
-**Five tiers, three levels each (15 levels).** The prototype only needs Tier 1 and Tier 2; the rest come in the core-game phase.
+- **Hawking evaporation** (Cosmic Dawn, gently in the Far Future): mass lost per second = rate × eraStartMass × (eraStartMass ÷ mass)^exponent. Small black holes evaporate faster, like real Hawking radiation. Cosmic Dawn: rate 0.008, exponent 2; at the start you need to swallow roughly one small object every 2–3 seconds to break even. The HUD shows a blinking "Evaporating" warning.
+- **Death**: the run ends if you **evaporate** (mass below 50% of the run's starting mass, Cosmic Dawn only) or are **swallowed** by a bigger rival. Far Future evaporation can't kill you; that era always ends in the finale.
+- **Quasar ignition**: gain 12% of your mass within 4 seconds to ignite for 8 seconds: twin jets, a maxed-out disk, 1.8× pull range, then a 6 s cooldown. A "Quasar" meter on the HUD shows how close you are.
+- **The last light** (end of the Far Future): everything fades away, the camera pulls back, and the black hole evaporates in little flashes of Hawking radiation until it's gone. Then a real fact: "When the last black holes evaporate, around 10¹⁰⁰ years from now, the universe goes dark."
+- **Run end screen**: how far you got (era meter), how long you lived (cosmic age), peak mass, objects eaten, run time, Stardust. Buttons: New run, Revive (rewarded ad, once per run, only after dying), ×2 Stardust (ad), Upgrades, Menu.
+- **Revive**: if you evaporated, your mass resets to the era's starting mass; if swallowed, you're moved away from the rival. 3 s of protection.
+- **Science cards** in runs: card 1 after your first run, card N on reaching era N. They pop up on the run end screen.
+- Powers (pick 1 of 3 at each era change) come in Session B; not built yet.
 
-| Tier | You start as | Can swallow | Dangerous (bigger than you) | Levels | Science card unlocked |
-| --- | --- | --- | --- | --- | --- |
-| 1. Dust Eater | Microscopic black hole | Dust, ice crystals, pebbles, small rocks | Asteroids | 1–3 | What is a black hole? |
-| 2. Rock Crusher | Small asteroid-sized | Rocks, asteroids, comets, satellites | Moons | 4–6 | The event horizon |
-| 3. World Devourer | Moon-sized | Moons, dwarf planets, rocky planets | Gas giants | 7–9 | Spaghettification |
-| 4. Star Swallower | Gas-giant-sized | Gas giants, red dwarfs, Sun-like stars | Giant stars | 10–12 | Hawking radiation |
-| 5. Galaxy Eater | Stellar-mass black hole | Giant stars, star clusters, nebulae, other black holes | Supermassive black hole (final boss) | 13–15 | Sagittarius A* |
+## Classic mode (the original 15 levels)
 
-Spawning rule: in each level, about 70% of objects are edible at the start, 25% become edible as you grow mid-level, and 5% stay dangerous all level. Objects respawn off-screen so the play area never empties.
+**Eat → grow → reach the target mass before the 3-minute timer runs out → spend Stardust → next level.** Each level starts at its tier's starting mass (plus Head Start). Time running out fails the level; on fail you keep half the Stardust and can Revive +30 s once (ad).
 
-The tiers are a game simplification, not real astrophysics: real black holes do not grow this way. The science cards say so.
+| Tier | Start mass | Level targets | Can swallow at the start | Dangerous |
+| --- | --- | --- | --- | --- |
+| 1. Dust Eater | 20 | 50 · 75 · 100 | Dust, ice crystals, pebbles | Small rocks (until ~58), asteroids |
+| 2. Rock Crusher | 100 | 200 · 450 · 1,000 | Dust, pebbles, rocks, asteroids | Comets/satellites (until grown), moons |
+| 3. World Devourer | 1,000 | 2,000 · 4,500 · 10,000 | Rocks, asteroids, comets, satellites, moons | Dwarf/rocky planets (until grown), gas giants |
+| 4. Star Swallower | 10,000 | 20,000 · 45,000 · 100,000 | Satellites, moons, planets, gas giants | Red dwarfs, Sun-like stars (until grown), giant stars |
+| 5. Galaxy Eater | 100,000 | 180,000 · 300,000 · **500,000 (boss)** *(tuned)* | Gas giants, red dwarfs, Sun-like and giant stars, cluster stars | Star clusters (scatter when you approach), bigger rivals |
+
+- The last level of each tier ends at the next tier's starting mass, so winning it is the tier-up moment and unlocks a science card.
+- Tier 5 targets were lowered *(tuned)* from 250k/500k/1M because Tier 5 meals don't grow as you do, so a 10× target took about 5 minutes.
+- **Level 15 boss**: Sagittarius A* sits in the middle and pulls you in. Touch it before reaching 500,000 and you're swallowed; reach the target, then dive in to merge and win the game.
+- Spawn rule per tier: about 70% of objects edible at the start, 25% edible after some growth, 5% dangerous all level. The weights live in `TIERS` in `config.js`.
 
 ## Objects
 
-**Every object has a size, a mass value and a movement behaviour; the player can eat it only if its radius is below 90% of the black hole's radius.** Masses roughly triple per step so each tier feels like a jump.
+**Every object has a size, a mass value and a movement behaviour.** Sizes are chosen so each object becomes edible at a planned black-hole mass. Masses roughly triple per step.
 
-| Object | Tier | Mass value | Behaviour |
+| Object | Mass | Radius (px) | Behaviour |
 | --- | --- | --- | --- |
-| Dust | 1 | 1 | Drifts slowly |
-| Ice crystal | 1 | 2 | Drifts, sparkles |
-| Pebble | 1 | 4 | Drifts |
-| Small rock | 1 | 10 | Drifts, slowly spins |
-| Asteroid | 2 | 30 | Moves in a straight line |
-| Comet | 2 | 60 | Fast, leaves a tail |
-| Satellite | 2 | 90 | Orbits a point; bonus Stardust |
-| Moon | 3 | 300 | Orbits a planet |
-| Dwarf planet | 3 | 600 | Slow orbit |
-| Rocky planet | 3 | 1,000 | Has moons orbiting it |
-| Gas giant | 4 | 3,000 | Has rings and moons |
-| Red dwarf | 4 | 6,000 | Glows; planets orbit it |
-| Sun-like star | 4 | 10,000 | Bright; pushes small objects outward |
-| Giant star | 5 | 30,000 | Huge, slow |
-| Star cluster | 5 | 60,000 | Group of stars that scatter when you approach |
-| Rival black hole | 5 | 100,000 | Also eats objects; can eat you if bigger |
-| Supermassive black hole | 5 | Boss | Final level: pulls you in; grow big enough to merge |
+| Dust | 1 | 8 | Drifts slowly |
+| Ice crystal | 2 | 10 | Drifts, sparkles |
+| Gas wisp *(run)* | 2 | 12 | Drifts (glowing gas) |
+| Pebble | 4 | 15 | Drifts |
+| Small rock | 10 | 36 | Drifts, slowly spins |
+| Gas cloud *(run)* | 10 | 36 | Drifts |
+| Asteroid | 30 | 41 | Straight line |
+| Protostar *(run)* | 30 | 41 | Drifts, glows |
+| Comet | 60 | 52 | Fast, leaves a tail; 2× Stardust |
+| Young star *(run)* | 60 | 52 | Drifts, glows |
+| Satellite | 90 | 59 | Orbits a point; 2× Stardust |
+| Blue star *(run)* | 90 | 59 | Drifts, glows |
+| Moon | 300 | 89 | Orbits a point, or orbits a planet |
+| Blue giant *(run)* | 300 | 89 | Drifts, glows |
+| Dwarf planet | 600 | 112 | Slow orbit |
+| Rocky planet | 1,000 | 133 | Sometimes has a moon |
+| Gas giant | 3,000 | 192 | Rings and 1–2 moons |
+| Red dwarf | 6,000 | 242 | Glows; 0–2 planets orbit it |
+| White dwarf *(run)* | 6,000 | 240 | Dim glow (Far Future) |
+| Sun-like star | 10,000 | 288 | Bright; pushes small objects outward |
+| Cluster star | 10,000 | 200 | Glows |
+| Giant star | 30,000 | 415 | Huge, slow |
+| Star cluster | 60,000 | 524 | Scatters into 6 cluster stars when you get close |
+| Rival black hole | 0.45–1.9× your mass | from its mass | See below |
 
-All mass values live in `config.js`. Tune them by playtesting, not by guessing.
+**Rival black holes** (Classic Tier 5, Galaxy Era, Far Future; at most 4 at once): each has a name (Hungry Hugo, Vera the Void…), shown when you eat it or it eats you. They wander, hunt and eat smaller objects (growing up to 3× the starting mass), chase you if they're big enough to eat you, and flee if you can eat them. A rival eats you if its radius × 0.9 is bigger than yours and your centre gets well inside it. You eat a rival like any other object. They have a violet ring; dangerous ones also get the red ring.
+
+All values live in `config.js` (`OBJECTS`, `RIVAL`, `BOSS`).
 
 ## Upgrades and economy
 
-**One currency, Stardust, earned from mass eaten and spent on six upgrades.** Each upgrade has 10 levels; cost rises 1.5× per level.
+**One currency, Stardust, spent on six upgrades.** Each upgrade has 10 levels; cost rises 1.5× per level.
 
-| Upgrade | Effect per level | Starting cost (Stardust) |
+| Upgrade | Effect per level | Starting cost |
 | --- | --- | --- |
-| Gravity Pull | Pulls nearby edible objects toward you from 10% farther | 50 |
+| Gravity Pull | +10% pull range | 50 |
 | Thrusters | +8% max speed | 50 |
-| Head Start | Begin each level with +10% mass | 100 |
-| Time Dilation | +10 seconds on the level timer | 75 |
-| Hawking Shield | Lose 1% less mass when hitting a bigger object (10% → 0% at max) | 100 |
-| Dark Matter Drip (idle) | Earn Stardust while away: +5 per hour, capped at 8 hours | 150 |
+| Head Start | +10% starting mass (levels and runs) | 100 |
+| Time Dilation | +10 s on the Classic timer; −8% Hawking evaporation in runs | 75 |
+| Hawking Shield | −1% mass lost per hit (10% → 0% at max) | 100 |
+| Dark Matter Drip (idle) | +5 Stardust per hour away, capped at 8 hours | 150 |
 
-Earning rule: Stardust earned = mass eaten in the level ÷ 10, rounded down. Satellites and comets give a 2× bonus. Daily first win gives a 2× bonus.
+**Earning rule** *(tuned)*: Stardust = floor(50 × (mass gained + bonus mass) ÷ starting mass), where "starting mass" is the level's or era's starting mass. The original "mass ÷ 10" gave 2 Stardust for level 1 and hundreds of thousands in Tier 5, because game mass spans 20 → 1,000,000. This version is worth about the same in every tier, and a first clear of level 1 (~60) affords the first upgrade (50).
 
-Balance targets for playtesting: a new player should afford their first upgrade after level 1, and clear Tier 1 in about 10 minutes.
+- Satellites and comets count their mass twice (2× bonus).
+- Classic: on fail you keep half.
+- Runs: each era is scored on its own and summed; nothing is halved (runs always end); reaching the last light gives ×1.5.
+- First win/run of the day: ×2. Rewarded ads: ×2 Stardust, Revive, one free upgrade per day.
 
 ## Physics and visual effects
 
-**Fake the physics so it looks real and stays fast; do not run a true gravity simulation.**
+**Fake the physics so it looks real and stays fast; no true gravity simulation.**
 
-Physics rules:
-
-- **Pull zone**: edible objects within 3× the black hole's radius (more with Gravity Pull) accelerate toward it, faster the closer they are.
-- **Swallow**: when an edible object's centre enters the black hole's radius, it plays the swallow animation and its mass is added.
-- **Bigger objects**: not pulled; collision pushes the black hole back and costs mass.
-- **Orbits**: moons and planets follow simple circular paths around their parent; no N-body physics.
-- **Performance cap**: at most 300 active objects; objects far off-screen are paused.
-
-Visual effects, in build order:
-
-1. **Black hole**: a pure black circle with a thin bright ring (photon ring).
-2. **Accretion disk**: a rotating orange-purple glowing ring around it, brighter right after eating.
-3. **Swallow animation (spaghettification)**: the object stretches toward the centre, shrinks and fades over about 0.4 s, with a small flash.
-4. **Particles**: debris trails from eaten objects, sparkles for Stardust.
-5. **Screen shake** when eating something big; **slow-motion moment** when entering a new tier.
-6. **Starfield background** with parallax layers.
-7. Later only: a gravitational lensing shader that bends the background around the black hole.
-
-Every effect must have a "Low graphics" off switch.
+- Pull zone, swallow, bounce and orbits as above; moons and planets follow simple circles around their parent.
+- **Performance**: at most 300 pooled objects (160 free-floating + reserve for moons, scattered stars and busy eras). Objects live within a few screens of the camera; eaten objects and objects left far behind reappear just off-screen. Objects far off-screen are paused.
+- **Black hole**: pure black disc, thin bright photon ring, a tilted rotating amber accretion disk (near half passing in front of the disc) that brightens after eating, and a soft glow.
+- **Swallow (spaghettification)**: the object stretches toward the centre, shrinks and fades over 0.4 s, with a small flash and debris particles that spiral in.
+- **Big swallows** (object ≥ 70% of your size, or any named object): camera close-up, 30% slow motion for 1 s, long stretch, bass drop, flash, shockwave, screen shake. 7 s cooldown.
+- **Tier-up / era change**: 25% slow motion, zoom out to 42%, shockwave, banner.
+- **Starfield** with three parallax layers; its brightness follows the era (faint in Cosmic Dawn, gone at the end of the Far Future). Each era has its own background tint.
+- **Low graphics** (Settings): one star layer, no particles, no glow, simple swallow fade, less shake.
+- Later only: a gravitational lensing shader.
 
 ## Modes, screens, save data and ads
 
-**Two modes:** *Levels* (the main game above) and *Sandbox* (no timer, no danger, spawn any unlocked object by tapping a menu, eat freely). Sandbox unlocks after level 3.
-
-**Screens** (designs are in `design/screens/`; rules in `design/DESIGN.md`):
-
 | Screen | Contents |
 | --- | --- |
-| Title | Logo, Play, Sandbox, Settings |
-| Level select | Tiers as a vertical path; locked levels greyed out |
-| HUD | Top: mass counter + bar to target mass, timer. Bottom: pause. Keep the middle clear |
-| Level complete | Mass eaten, Stardust earned, "Double it" ad button, Next |
-| Level failed | Stardust kept, "Revive +30 s" ad button, Retry |
-| Upgrade shop | Six upgrade cards with level, effect, cost |
-| Science card | Title, 2–3 sentence fact, illustration, Close |
-| Settings | Music, sound effects, Low graphics, language (English first) |
+| Title | Logo, black hole art, **PLAY** (starts a run), best run, [Classic] [Sandbox] [Upgrades] [Settings] |
+| HUD (run) | Mass + "Next era" bar, cosmic age, era panel (meter, next era, Evaporating warning, Quasar meter), record, pause |
+| HUD (Classic) | Mass + target bar, time left, tier panel, record, pause |
+| Run end | Run complete / Run over, era reached, cosmic age, peak mass, objects, time, Stardust, New run / Revive / ×2 / Upgrades / Menu |
+| Classic level select | Star chart: tiers bottom to top, locked levels greyed, selected level bar, "Enter event horizon" |
+| Level complete / failed | Stats, Stardust, next-upgrade progress, Next / Retry, ad buttons |
+| Upgrade shop | Six upgrade cards with level, effect, cost; free upgrade via ad; launch run or level |
+| Science card / log | Title, short real fact, diagram, tags, close; the log lists all five cards |
+| Settings | Music, sound effects, Low graphics, auto-record scenarios, language (English), reset progress |
+| Sandbox menu | Free play (choose starting tier), "What if…?" scenarios, auto-record toggle |
 
-**Save data** (browser localStorage; Android uses the same via Capacitor): highest level reached, Stardust balance, upgrade levels, unlocked science cards, settings, last-played timestamp (for idle earnings). Save after every level and when the tab is hidden. Wrap all storage reads and writes in try/catch so the game still runs if storage is blocked.
-
-**Ad hooks** (prototype: buttons only, no real ads): write one function, `showRewardedAd(onReward)`, that for now just calls `onReward()` after a 1-second fake delay. Later sessions swap in the CrazyGames, Poki or AdMob SDK behind that one function. Rewarded ads are always optional: double Stardust, revive, one free upgrade per day. No forced ads in the prototype.
+- **Sandbox** unlocks after clearing Classic level 3 **or** reaching First Stars in a run.
+- **Save data** (localStorage, wrapped in try/catch): Classic levels cleared, Stardust, upgrade levels, science cards, settings, last-played time (idle earnings), daily-bonus dates, runs played/completed, best era, best run mass. Saved after every level/run and when the tab is hidden.
+- **Ad hooks**: `showRewardedAd(onReward)` in `src/systems/ads.js` shows a placeholder and rewards after 1 s. Swap a real SDK in later behind that one function. Ads are always optional.
+- **Testing shortcuts**: `?unlockall` (every level, sandbox and card, not saved) and `?reset` (wipe the save).
 
 ## Built for YouTube Shorts
 
-**Every play session should be able to produce a clip that hooks a stranger in the first 3 seconds and makes them rewatch.** Shorts viewers decide within about 3 seconds whether to stay, 15–30 second clips tend to get higher completion, loops push rewatches, and text must sit in the central ~75% of a 9:16 frame so YouTube's buttons don't cover it ([JoinBrands](https://joinbrands.com/blog/youtube-shorts-best-practices/)). The game is designed around those facts.
+**Every session should be able to produce a clip that hooks a stranger in the first 3 seconds.** Built:
 
-### 1. Hook moments the game creates on purpose
-
-- **Instant action**: every level and scenario starts mid-feast, with something edible already being pulled in. No intro, no menu in shot.
-- **A "big swallow" within 3 seconds**: in Shorts scenarios a large object (Earth, the Moon, Jupiter) is placed right beside the black hole at the start.
-- **Spaghettification close-up**: on big swallows the camera pushes in, time slows to 30% for ~1 second, the object stretches into a thread, then a bass-heavy flash and screen shake.
-- **Real names on screen**: when you eat a named object, a bold label pops up ("EARTH – 5.97 × 10²⁴ kg"). Viewers recognise Earth; a grey circle hooks no one.
-- **Numbers going up**: a large mass counter that ticks up fast and flashes on milestones ("1 EARTH MASS", "1 SUN MASS").
-- **Tier-up zoom-out**: the camera pulls back to show how tiny the last thing you ate was. Size comparison is the most shareable moment in the game.
-
-### 2. "What if…?" scenarios (Sandbox presets)
-
-One tap loads a ready-made, clip-sized scene, each built to be a 15–30 second Short with a title already written:
-
-| Scenario | What happens | Suggested Short title |
-| --- | --- | --- |
-| Black hole vs Earth | A small black hole falls into Earth and eats it from the inside | What if a black hole hit Earth? |
-| Black hole vs the Sun | The black hole tears the Sun into a glowing spiral | A black hole eats the Sun |
-| Eat the whole Solar System | Mercury to Neptune, in order, at speed | Eating the Solar System in 20 seconds |
-| Two black holes collide | A merger with a shockwave flash | When two black holes collide |
-| Tiny vs supermassive | Your black hole vs Sagittarius A* | The biggest black hole in our galaxy |
-
-Scientific note on each scenario card: it is dramatised for fun, with one real fact shown at the end. That fact is the payoff that earns comments.
-
-### 3. Clip mode (in-game recorder)
-
-- **Clip button** (top corner, hidden while recording): saves the **last 20 seconds** of gameplay as a vertical 9:16 video file, using the browser's canvas capture (`canvas.captureStream` + `MediaRecorder`, WebM). On Android, save to the gallery.
-- **Clean HUD while recording**: hides pause, timer and buttons; keeps only the big mass counter and object labels, all inside the central 75% safe area.
-- **Watermark**: small game name + "Play free – link in bio" in the lower-middle, inside the safe area.
-- **Loop-friendly ending**: clips end on a dark frame right after a swallow flash, which cuts cleanly back to the starting frame.
-- **Optional caption**: the scenario's title text appears in the first 2 seconds as large bold text.
-
-### 4. Sound built for clips
-
-- A deep rumble that rises as objects get pulled in, a crunch or "whoomp" on each swallow, and a bass drop on big swallows and tier-ups. Satisfying sound on its own keeps people watching.
-- Keep music quiet under the effects so you can still lay trending audio over the clip in YouTube's editor.
-
-### 5. Posting checklist for each Short
-
-- [ ] Biggest moment in the first 3 seconds (use a "What if…?" scenario)
-- [ ] 15–30 seconds long, ending on a loopable frame
-- [ ] Title asks a question ("What if…?") or promises a payoff
-- [ ] One real space fact in the description or on screen at the end
-- [ ] Link to the free web game in the description and channel bio
-- [ ] Post on a schedule you can keep, e.g. three times a week; reuse the same clip on TikTok and Instagram Reels
+- **Clip recorder**: the record button captures the canvas plus sound and saves the last ~20–30 s as a 9:16 WebM. WebM can't be trimmed in the browser, so overlapping recorders restart every 10 s and the newest one that is at least 20 s old is saved. While recording, the HTML HUD is replaced by an in-canvas overlay: big mass counter starting 14% from the top, watermark ending 86% down. Only the REC indicator and its Save button are HTML, so they aren't in the clip. Clips end on a dark frame so they loop.
+- **Named-object labels** with real masses ("EARTH · 5.97 × 10²⁴ kg") and swallow labels next to the black hole.
+- **Big-swallow close-up**, milestones, the tier-up / era zoom-out, quasar ignition and the last-light finale are all clip moments.
+- **Sound** is synthesised with Web Audio: rumble rising with pull, swallow whoomps, bass drops, collision thuds, a quiet ambient music pad. Sound is included in clips.
+- **"What if…?" scenarios** (Sandbox): Black hole vs Earth, vs the Sun, Eat the Solar System, Two black holes collide, Tiny vs Sagittarius A*. Each opens with a caption, tracks real kilograms, ends with a real fact on a dark frame, and can auto-record.
 
 ## Technical requirements and file structure
 
-**Small, plain and easy to hand between sessions.**
-
-- Phaser 3 + Vite; `npm run dev` to play locally, `npm run build` to produce a static `dist/` folder for web portals.
-- Total download under 10 MB for the web build; no external server or login.
-- Shapes and glows drawn in code where possible; any image or sound files go in `public/assets/` with their licence noted in `CREDITS.md`.
-- Resolution: design at 720×1280, scale to fit any screen.
-- Test in Chrome on desktop and on a real low-end Android phone after every session.
-
-File structure:
+- Phaser 3 + Vite; `npm run dev` to play locally, `npm run build` for a static `dist/` (about 1.5 MB). Every push to `main` deploys to GitHub Pages via `.github/workflows/deploy.yml`.
+- No external server or login. Fonts are bundled with `@fontsource` (Barlow Condensed, IBM Plex Sans, Space Mono). Everything visual is drawn in code; any asset file goes in `public/assets/` with its licence in `CREDITS.md`.
+- Resolution: designed at 720×1280, scaled to fit. Menus and the normal HUD are HTML laid out at 390 px wide and scaled over the canvas; anything that must appear in clips is drawn in the canvas.
 
 ```
 black-hole-game/
 ├── index.html
-├── package.json
-├── SPEC.md              ← this document
-├── CREDITS.md
-├── design/              ← DESIGN.md, screens/, html/ (from Stitch)
+├── SPEC.md · CREDITS.md · README.md
+├── design/                 DESIGN.md, screens/, html/
 ├── public/assets/
 └── src/
-    ├── main.js          ← Phaser game setup
-    ├── config.js        ← every tunable number (masses, speeds, costs, tiers)
-    ├── scenes/
-    │   ├── TitleScene.js
-    │   ├── GameScene.js
-    │   ├── ShopScene.js
-    │   └── UIScene.js   ← HUD drawn over GameScene
-    ├── objects/
-    │   ├── BlackHole.js
-    │   └── SpaceObject.js
-    ├── systems/
-    │   ├── spawner.js
-    │   ├── save.js
-    │   └── ads.js       ← showRewardedAd()
-    └── data/
-        └── scienceCards.js
+    ├── main.js             Phaser setup, fonts, start-up
+    ├── config.js           every tunable number (eras, tiers, objects, economy, effects…)
+    ├── flow.js             moving between screens and scenes
+    ├── scenes/             TitleScene (menus), GameScene (run/classic/sandbox/scenario), ShopScene, UIScene (in-canvas overlay)
+    ├── objects/            BlackHole, SpaceObject
+    ├── systems/            run (eras), spawner, effects, textures, audio, recorder, scenarios, save, economy, ads, format, starfield
+    ├── data/               levels, scienceCards, scenarios, rivals
+    └── ui/                 HTML menus and HUD: dom, menus, hud, overlays, shop, scienceCard, icons, styles.css
 ```
 
 ## Build order
 
-**One task per Claude Code session; play the game after each one before starting the next.** Sessions 1–5 are the prototype (Weeks 1–2); 6–11 are the core game (Weeks 3–6). Session 5 comes early on purpose, so you can post Shorts while you build.
+**Original prototype and core game (done):**
 
-- [ ] **Session 1 – Project + movement.** Set up Phaser + Vite and the file structure. Black hole moves toward pointer with smooth acceleration; starfield background; camera follows.
-- [ ] **Session 2 – Eating and growing.** Spawner for Tier 1 objects, pull zone, swallow rule, mass → radius formula, objects respawn off-screen, mass counter on screen.
-- [ ] **Session 3 – Tiers, danger and zoom.** Tier 2 objects, bigger-object collision penalty, camera zoom as you grow, tier-up moment, level timer and win/fail.
-- [ ] **Session 4 – Look and feel.** Accretion disk glow, spaghettification animation, particles, screen shake, Low graphics toggle. **→ Playtest gate: fun in 30 seconds?**
-- [ ] **Session 5 – Shorts toolkit.** Clip button (saves the last 20 s as 9:16 video), clean recording HUD inside the safe area, watermark, named-object labels, big-swallow slow-motion close-up, swallow sounds, and the first scenario: "Black hole vs Earth".
-- [ ] **Session 6 – Stitch screens.** Build the title, level select, HUD, level complete/failed, upgrade shop and science card screens to match `design/DESIGN.md` and `design/screens/`.
-- [ ] **Session 7 – Economy.** Stardust, upgrade shop, all six upgrades, save/load.
-- [ ] **Session 8 – Levels 1–9.** Level select, Tiers 1–3 content, science cards 1–3.
-- [ ] **Session 9 – Levels 10–15.** Tiers 4–5, rival black holes, final boss, science cards 4–5.
-- [ ] **Session 10 – Sandbox, scenarios, idle earnings, ad hooks.** Sandbox mode, the remaining "What if…?" scenarios, Dark Matter Drip, `showRewardedAd()` placeholders.
-- [ ] **Session 11 – Polish and performance.** Music, settings, test on a low-end phone, fix lag, check clip recording on Android. **→ Gate: smooth on a cheap phone, no major bugs.**
+- [x] Session 1 – Project + movement
+- [x] Session 2 – Eating and growing
+- [x] Session 3 – Tiers, danger and zoom
+- [x] Session 4 – Look and feel
+- [x] Session 5 – Shorts toolkit
+- [x] Session 6 – Stitch screens
+- [x] Session 7 – Economy
+- [x] Session 8 – Levels 1–9
+- [x] Session 9 – Levels 10–15 (rivals, boss)
+- [x] Session 10 – Sandbox, scenarios, idle earnings, ad hooks
+- [x] Session 11 – Polish and performance
+
+**Making it fun** (from *Making Black Hole Event Horizon Fun — Researched Ideas*):
+
+- [x] **Session A – Runs and eras.** One run through five eras with Hawking evaporation in Cosmic Dawn, era changes using the tier-up moment, quasar ignition, the last-light finale. Fixed levels kept as Classic.
+- [ ] **Session B – Cosmic powers.** Pick 1 of 3 at each era change; six powers and three synergies. **→ Playtest gate: do runs feel different from each other?**
+- [ ] **Session C – The Universe Talks Back.** Civilisation planets with eat/spare choices, boons and consequences, Galactic News ticker.
+- [ ] **Session D – Go viral.** Daily Universe seed, share card, Feed Your Hometown, "Eat the Milky Way in under 10 minutes".
+- [ ] **Session E – Cosmic events.** Supernova, tidal disruption, wandering black hole, wormhole, white hole, dark matter, merger chirp.
+- [ ] **Session F – Cosmic Craft (real recipes).**
 
 How to start each session, ready to paste:
 
-> Here is the game spec (SPEC.md in the repo). We are on **Session N – [name]**. Only do that session's task. Keep tunable numbers in config.js. When done, make sure the game runs with `npm run dev`, then commit with a clear message.
+> Here is the game spec (SPEC.md in the repo). We are on **Session X – [name]**. Only do that session's task. Keep tunable numbers in config.js. When done, make sure the game runs with `npm run dev`, update SPEC.md if the game changed, then commit with a clear message.
 
 ## Out of scope for now
 
-**Not in the first release; add only after players ask for it.** Saying no to these is what keeps the build inside your $100.
+**Not in the first release; add only after players ask for it.**
 
 - Full 3D graphics or a real gravity simulation
-- Multiplayer, online leaderboards, accounts or login
+- Multiplayer, online leaderboards, accounts or login (until the "Later – Live features" step)
 - Real ads SDK and in-app purchases (come in the platform-build phase)
 - Gravitational lensing shader
 - Prestige / new-universe reset
 - Skins and cosmetics shop
 - iOS build, Steam build
 - Languages other than English
-- Story, characters or dialogue

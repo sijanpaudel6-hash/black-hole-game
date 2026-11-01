@@ -16,7 +16,12 @@ npm run build    # static build in dist/
 
 ## What's in the game
 
-- **Levels:** 15 levels in 5 tiers (Dust Eater → Rock Crusher → World Devourer →
+- **Runs (main mode, PLAY):** "One Life of a Black Hole". One run through five eras:
+  Cosmic Dawn (Hawking evaporation: eat or shrink away) → First Stars → Galaxy Era
+  (named rival black holes) → Quasar Era (feed fast to ignite as a quasar) → Far Future
+  (food runs out; the run ends with your black hole as the last light, evaporating).
+  Era changes use the tier-up moment. Tunables: `RUN`, `QUASAR`, `FINALE` in `src/config.js`.
+- **Classic levels:** 15 levels in 5 tiers (Dust Eater → Rock Crusher → World Devourer →
   Star Swallower → Galaxy Eater), a 3-minute timer, and a target mass. Things bigger
   than you have a red ring: touching one bounces you off and costs 10% of your mass.
   Level 15 is the boss: grow to the target, then dive into Sagittarius A* to merge.
@@ -24,7 +29,7 @@ npm run build    # static build in dist/
   zoom-out, and unlocks a science card.
 - **Stardust and upgrades:** six upgrades (Gravity Pull, Thrusters, Head Start, Time
   Dilation, Hawking Shield, Dark Matter Drip idle income), 10 levels each.
-- **Sandbox** (after level 3): no timer, no danger, spawn any unlocked object, and sit
+- **Sandbox** (after Classic level 3 or reaching First Stars in a run): no timer, no danger, spawn any unlocked object, and sit
   inside big things to eat them from the inside.
 - **"What if…?" scenarios:** Black hole vs Earth, vs the Sun, Eat the Solar System, Two
   black holes collide, Tiny vs supermassive. Each is a ready-made 15–30 s clip that ends

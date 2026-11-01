@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { DANGER, DEPTH, EATING, FEEDING, GROWTH, OBJECTS, RIVAL, SPAWNER, COLORS, BOSS } from '../config.js';
 import SpaceObject from '../objects/SpaceObject.js';
+import { RIVAL_NAMES } from '../data/rivals.js';
 
 const TAU = Math.PI * 2;
 
@@ -36,6 +37,8 @@ export default class Spawner {
     }
     this.setWeights(opts.weights);
     this.rivalCount = 0;
+    this.rootTarget = SPAWNER.count; // how many free-floating objects to keep (eras can change it)
+    this.spawnFraction = 1; // < 1: some eaten/left-behind objects don't come back (Far Future)
     this.pushers = [];
   }
 
@@ -119,7 +122,10 @@ export default class Spawner {
     }
     if (obj.type === 'rival' && obj.inUse) this.rivalCount--;
     obj.reset(type, x, y, opts);
-    if (type === 'rival') this.rivalCount++;
+    if (type === 'rival') {
+      this.rivalCount++;
+      obj.rivalName = Phaser.Utils.Array.GetRandom(RIVAL_NAMES);
+    }
     for (const spec of OBJECTS[type].children ?? []) {
       const n = Phaser.Math.Between(spec.count[0], spec.count[1]);
       for (let i = 0; i < n; i++) {
@@ -154,7 +160,9 @@ export default class Spawner {
 
   /** Eaten or left behind: roots come back off-screen, extras go back to the pool. */
   recycle(obj, bh, v) {
-    if (obj.role !== 'root' || !this.weights) {
+    const shrink = obj.role === 'root' && (this.roots > this.rootTarget || Math.random() > this.spawnFraction);
+    if (obj.role !== 'root' || !this.weights || shrink) {
+      if (obj.role === 'root') this.roots--;
       if (obj.type === 'rival') this.rivalCount--;
       obj.release();
       return;
@@ -162,6 +170,26 @@ export default class Spawner {
     const type = this.pickType();
     const p = this.ringPoint(OBJECTS[type].radius || bh.radius, v);
     this.spawnRoot(obj, type, p.x, p.y, bh);
+  }
+
+  /** Busier eras: add a few objects per frame just off-screen until there are rootTarget. */
+  topUp(bh, v) {
+    if (!this.weights || this.spawnFraction < 1) return;
+    for (let i = 0; i < 3 && this.roots < this.rootTarget; i++) {
+      const obj = this.objects.find((o) => !o.inUse);
+      if (!obj) return;
+      const type = this.pickType();
+      const p = this.ringPoint(OBJECTS[type].radius || bh.radius, v);
+      this.spawnRoot(obj, type, p.x, p.y, bh);
+      this.roots++;
+    }
+  }
+
+  /** Remove everything (end of a run). */
+  releaseAll() {
+    for (const o of this.objects) if (o.inUse) o.release();
+    this.rivalCount = 0;
+    this.rings.forEach((r) => r.setVisible(false));
   }
 
   /** Sandbox: spawn an object near the black hole. */
@@ -254,6 +282,9 @@ export default class Spawner {
     let ringIndex = 0;
     this.pushers.length = 0;
     const boss = ctx.boss;
+    this.roots = 0;
+    for (const o of this.objects) if (o.inUse && o.role === 'root') this.roots++;
+    this.topUp(bh, v);
 
     for (const obj of this.objects) {
       if (!obj.inUse) continue;

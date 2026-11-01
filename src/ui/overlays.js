@@ -2,7 +2,8 @@
 
 import { mount, on, clear } from './dom.js';
 import { ICONS } from './icons.js';
-import { kgHtml, formatInt, formatTimePrecise } from '../systems/format.js';
+import { kgHtml, formatInt, formatTimePrecise, ageText } from '../systems/format.js';
+import { RUN } from '../config.js';
 import { nextUpgradeGoal } from '../systems/economy.js';
 import { settingsRowsHtml, toggleSetting } from './menus.js';
 
@@ -151,4 +152,72 @@ export function renderScenarioEnd({ scenario, clipSaved, onReplay, onBack }) {
     </div>`,
   );
   on(node, { '[data-act=replay]': onReplay, '[data-act=back]': onBack });
+}
+
+/**
+ * End of a run: completed (the last light) or died (evaporated / swallowed).
+ * @param {object} p see RunController.finishRun / GameScene.showRunEnd
+ */
+export function renderRunEnd(p) {
+  const title = p.completed ? 'The last light' : p.reason === 'evaporated' ? 'Evaporated' : 'Swallowed';
+  const sub = p.completed
+    ? 'You outlived every star in the universe'
+    : p.reason === 'evaporated'
+      ? 'Hawking radiation took the last of you'
+      : p.killer
+        ? `Eaten by ${p.killer}`
+        : 'A bigger black hole ate you';
+  const segs = RUN.eras.map((e) => `<i class="${e.id <= p.era.id ? 'on' : ''}"></i>`).join('');
+  const node = mount(
+    'modal',
+    `<div class="modal-backdrop solid fade-in">
+      <div class="screen end-screen" style="position:relative;min-height:100%">
+        <span class="chip end-chip ${p.completed ? '' : 'fail'}"><i class="dot"></i>${p.completed ? 'Run complete' : 'Run over'}</span>
+        <div class="end-rule"><i></i><b></b><i></i></div>
+        <div class="display end-title">${title}</div>
+        <div class="label end-sub">${sub}</div>
+        <div class="stats">
+          <div class="row"><span class="label">Reached</span><span class="val">Era ${p.era.id} · ${p.era.name}</span></div>
+          <div class="row" style="display:block"><div class="meter" style="grid-template-columns:repeat(5,1fr)">${segs}</div></div>
+          <div class="row"><span class="label">Lived until</span><span class="val science">${ageText(p.age)}</span></div>
+          <div class="row"><span class="label">Peak mass</span><span class="val amber">${kgHtml(p.peakKg, 3)}</span></div>
+          <div class="row"><span class="label">Objects consumed</span><span class="val">${formatInt(p.objects)} bodies</span></div>
+          <div class="row"><span class="label">Run time</span><span class="val">${formatTimePrecise(p.time)}</span></div>
+        </div>
+        <div class="reward">
+          <span>Stardust earned</span>
+          <span class="big"><span class="spark">✦</span><span class="sd-amount">+${formatInt(p.reward.total)}</span></span>
+        </div>
+        ${p.reward.daily ? '<div class="label amber reward-note">First run today · ×2</div>' : ''}
+        ${p.completed ? `<div class="label amber reward-note">Full life bonus · ×${RUN.completeBonus}</div>` : ''}
+        ${goalHtml()}
+        <div class="end-actions">
+          <button class="btn-primary split" data-act="again"><span>New run</span>${ICONS.arrow}</button>
+          ${p.canRevive ? `<button class="btn-secondary" data-act="revive">${ICONS.play} Revive · Watch ad</button>` : ''}
+          ${p.canDouble ? `<button class="btn-secondary" data-act="double">${ICONS.play} ×2 Stardust · Watch ad</button>` : ''}
+          <div class="title-links">
+            <button class="btn-text" data-act="shop">[ Upgrades ]</button>
+            <span class="sep"></span>
+            <button class="btn-text" data-act="menu">[ Menu ]</button>
+          </div>
+        </div>
+      </div>
+    </div>`,
+  );
+  on(node, {
+    '[data-act=again]': p.onAgain,
+    '[data-act=shop]': p.onShop,
+    '[data-act=menu]': p.onMenu,
+    '[data-act=revive]': (_e, b) => {
+      b.disabled = true;
+      p.onRevive();
+    },
+    '[data-act=double]': (_e, b) => {
+      b.disabled = true;
+      p.onDouble((total) => {
+        node.querySelector('.sd-amount').textContent = `+${formatInt(total)}`;
+        b.remove();
+      });
+    },
+  });
 }

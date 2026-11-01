@@ -4,14 +4,14 @@
 
 import { mount, on } from './dom.js';
 import { ICONS } from './icons.js';
-import { kgHtml, formatTime, formatTimePrecise } from '../systems/format.js';
-import { LEVEL, OBJECTS, TIERS } from '../config.js';
+import { kgHtml, formatTime, formatTimePrecise, ageHtml } from '../systems/format.js';
+import { LEVEL, OBJECTS, TIERS, RUN } from '../config.js';
 import { recordingSupported } from '../systems/recorder.js';
 
 export default class Hud {
   /**
    * @param {object} o
-   * @param {'level'|'sandbox'|'scenario'} o.mode
+   * @param {'run'|'level'|'sandbox'|'scenario'} o.mode
    * @param {object} [o.level] getLevel() info (levels mode)
    * @param {object} o.handlers onPause, onRecord, onStopRecord, onSpawn(type), onTier(id)
    * @param {string[]} [o.spawnTypes] sandbox spawn menu
@@ -22,6 +22,8 @@ export default class Hud {
     this.o = o;
     const { mode, level } = o;
     const canRecord = recordingSupported();
+    const hasTarget = mode === 'level' || mode === 'run';
+    this.targetWord = mode === 'run' ? 'Next era' : 'Target';
     const tierPanel =
       mode === 'level'
         ? `<div class="panel chamfer hud-tier">
@@ -29,7 +31,14 @@ export default class Hud {
             <div class="segs">${[0, 1, 2].map((i) => `<i class="${i < level.indexInTier ? 'on' : i === level.indexInTier ? 'on cur' : ''}"></i>`).join('')}
               <span class="label" style="margin-left:6px">${level.boss ? 'Final: merge with Sgr A*' : level.tier.id < 5 ? `Next: ${TIERS[level.tier.id].name}` : 'Next: the core'}</span></div>
           </div>`
-        : '<div></div>';
+        : mode === 'run'
+          ? `<div class="panel chamfer hud-tier hud-era">
+              <div class="head"><span class="amber">[ ■ ]</span> <span class="era-name"></span></div>
+              <div class="segs">${RUN.eras.map(() => '<i></i>').join('')}<span class="label era-next" style="margin-left:6px"></span></div>
+              <div class="label danger era-warn" style="display:none;margin-top:6px">● Evaporating</div>
+              <div class="era-quasar" style="display:none;margin-top:8px"><div class="label science" style="margin-bottom:4px">Quasar</div><div class="progress"><b style="background:var(--science)"></b></div></div>
+            </div>`
+          : '<div></div>';
     const tray =
       mode === 'sandbox'
         ? `<div class="tray">${TIERS.filter((t) => t.id <= o.maxTier)
@@ -43,12 +52,13 @@ export default class Hud {
         <div class="hud-normal">
           <div class="hud-top">
             <div class="panel hud-mass">
-              <div class="row"><span class="label">Mass</span>${mode === 'level' ? '<span class="label amber target-pct"></span>' : ''}</div>
+              <div class="row"><span class="label">Mass</span>${hasTarget ? '<span class="label amber target-pct"></span>' : ''}</div>
               <div class="value"></div>
-              ${mode === 'level' ? '<div class="progress"><b></b></div><div class="ticks">' + '<i></i>'.repeat(11) + '</div>' : ''}
+              ${hasTarget ? '<div class="progress"><b></b></div><div class="ticks">' + '<i></i>'.repeat(11) + '</div>' : ''}
             </div>
             <div class="hud-right">
               ${mode === 'level' ? '<div class="panel hud-time"><div class="label">Time left</div><div class="value"></div></div>' : ''}
+              ${mode === 'run' ? '<div class="panel hud-time hud-age"><div class="label">Cosmic age</div><div class="value"></div></div>' : ''}
               ${canRecord ? `<button class="hud-btn chamfer rec" data-act="record" aria-label="Record clip">${ICONS.record}</button>` : ''}
             </div>
           </div>
@@ -70,7 +80,10 @@ export default class Hud {
     this.pctEl = this.node.querySelector('.target-pct');
     this.barEl = this.node.querySelector('.progress b');
     this.timePanel = this.node.querySelector('.hud-time');
-    this.timeEl = this.node.querySelector('.hud-time .value');
+    this.timeEl = mode === 'level' ? this.node.querySelector('.hud-time .value') : null;
+    this.ageEl = this.node.querySelector('.hud-age .value');
+    this.eraWarn = this.node.querySelector('.era-warn');
+    this.eraQuasar = this.node.querySelector('.era-quasar');
     this.last = {};
 
     const h = o.handlers;
@@ -94,7 +107,7 @@ export default class Hud {
     if (this.pctEl) {
       const pct = Math.min(100, Math.floor(progress * 100));
       this.set('pct', pct, (v) => {
-        this.pctEl.textContent = `Target [${v}%]`;
+        this.pctEl.textContent = `${this.targetWord} [${v}%]`;
         this.barEl.style.width = `${v}%`;
       });
     }
@@ -102,6 +115,26 @@ export default class Hud {
       this.set('time', formatTime(timeLeft), (v) => (this.timeEl.textContent = v));
       this.set('warn', timeLeft < LEVEL.timeWarning, (v) => this.timePanel.classList.toggle('warn', v));
     }
+  }
+
+  /** Run mode: show which era we're in. */
+  setEra(era) {
+    const n = this.node;
+    if (!n.querySelector('.era-name')) return;
+    n.querySelector('.era-name').textContent = `Era ${era.id} · ${era.name}`;
+    n.querySelectorAll('.hud-era .segs i').forEach((seg, i) => seg.classList.toggle('on', i < era.id));
+    const next = RUN.eras[era.id];
+    n.querySelector('.era-next').textContent = next ? `Next: ${next.name}` : 'The end of time';
+    this.targetWord = era.goal ? 'Next era' : 'The end';
+    this.eraQuasar.style.display = era.quasar ? '' : 'none';
+    this.last.pct = undefined;
+  }
+
+  /** Run mode per frame: cosmic age, evaporation warning, quasar meter. */
+  updateRun({ age, evaporating, quasar }) {
+    this.set('age', ageHtml(age), (v) => (this.ageEl.innerHTML = v));
+    this.set('evap', evaporating, (v) => (this.eraWarn.style.display = v ? '' : 'none'));
+    if (quasar !== undefined) this.set('quasar', Math.round(quasar * 100), (v) => (this.eraQuasar.querySelector('b').style.width = `${v}%`));
   }
 
   flashMass() {
