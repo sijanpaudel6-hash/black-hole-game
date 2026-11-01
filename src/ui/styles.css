@@ -1432,3 +1432,247 @@ sup {
 .best-run {
   margin-top: 10px;
 }
+
+/* ---------- Cosmic powers (runs) ---------- */
+
+.hud-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.hud-powers {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.hud-powers:empty {
+  display: none;
+}
+
+.hud-powers .pw {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 5px 5px 4px;
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  color: var(--text);
+}
+
+.hud-powers .pw .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.hud-powers .pw.syn {
+  color: var(--science);
+  border-color: var(--science);
+  align-content: center;
+}
+
+.pips {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.pips i {
+  width: 5px;
+  height: 3px;
+  background: var(--hairline);
+}
+
+.pips i.on {
+  background: var(--amber);
+}
+
+.jets-btn {
+  position: relative;
+  overflow: hidden;
+  color: var(--science);
+  height: 56px;
+  grid-template-rows: auto auto;
+  place-content: center;
+  gap: 1px;
+}
+
+.jets-btn .jets-label {
+  font-family: var(--head);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 12px;
+}
+
+.jets-btn .cd {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0;
+  background: rgba(7, 8, 12, 0.7);
+  pointer-events: none;
+}
+
+.jets-btn.ready {
+  border-color: var(--science);
+}
+
+.jets-btn.auto .jets-label::after {
+  content: ' · auto';
+}
+
+.power-pick {
+  justify-content: center;
+  gap: 0;
+}
+
+.pp-kicker {
+  text-align: center;
+}
+
+.pp-title {
+  text-align: center;
+  margin: 2px 0 14px;
+}
+
+.power-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.power-card {
+  display: flex;
+  gap: 12px;
+  text-align: left;
+  padding: 12px;
+  background: var(--panel-solid);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.power-card:active,
+.power-card.chosen {
+  border-color: var(--amber);
+  transform: scale(0.98);
+}
+
+.power-card.syn {
+  border-color: var(--science);
+}
+
+.pc-icon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--panel-raised);
+  color: var(--amber);
+}
+
+.pc-icon .icon {
+  width: 26px;
+  height: 26px;
+}
+
+.pc-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.pc-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.pc-name {
+  font-family: var(--head);
+  font-weight: 600;
+  font-size: 19px;
+  line-height: 22px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pc-desc {
+  margin: 4px 0 6px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text);
+}
+
+.pc-level {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pc-level .pips i {
+  width: 10px;
+}
+
+.pc-syn {
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--muted);
+}
+
+.pc-syn.now {
+  color: var(--science);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.pc-syn .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.pc-owned {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
+
+.pc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.pc-chip .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.end-powers {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}

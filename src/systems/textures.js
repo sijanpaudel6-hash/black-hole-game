@@ -207,6 +207,42 @@ const DRAW = {
     shade(ctx, c, c, R, 0.6);
     ctx.restore();
   },
+  // Neutron star / pulsar: a tiny, blazing core with two beams (it spins, so the beams sweep).
+  neutronStar(ctx, c, R, color) {
+    const L = R * 1.8;
+    for (const side of [-1, 1]) {
+      const g = ctx.createLinearGradient(c, c, c, c + side * L);
+      g.addColorStop(0, hex(color, 0.85));
+      g.addColorStop(1, hex(color, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(c - R * 0.12, c);
+      ctx.lineTo(c - R * 0.45, c + side * L);
+      ctx.lineTo(c + R * 0.45, c + side * L);
+      ctx.lineTo(c + R * 0.12, c);
+      ctx.closePath();
+      ctx.fill();
+    }
+    glow(ctx, c, c, 0, R * 1.5, color, 0.7);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(c, c, R * 0.55, 0, TAU);
+    ctx.fill();
+  },
+  // Shattered chunk: a hot, jagged lump (tinted with the colour of what it came from).
+  fragment(ctx, c, R) {
+    glow(ctx, c, c, R * 0.3, R, 0xffffff, 0.35);
+    ctx.fillStyle = '#d8d4cf';
+    lumpy(ctx, c, c, R * 0.8, 7, 0.55);
+    ctx.fill();
+    ctx.save();
+    ctx.clip();
+    shade(ctx, c, c, R * 0.8, 0.45);
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(255,214,170,0.9)';
+    ctx.lineWidth = R * 0.08;
+    ctx.stroke();
+  },
   moon(ctx, c, R, color) {
     sphere(ctx, c, c, R, color, 0.25, 0.5);
     clipCircle(ctx, c, c, R, () => craters(ctx, c, c, R, color, 12));

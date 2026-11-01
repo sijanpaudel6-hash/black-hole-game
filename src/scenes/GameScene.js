@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import {
   GAME, COLORS, DEPTH, CAMERA, LEVEL, TIERS, DANGER, EFFECTS, HUD, BOSS, GROWTH, WORLD_EDGE, MILESTONES,
-  LOW_GRAPHICS, RECORDING, ADS, EATING, RUN,
+  LOW_GRAPHICS, RECORDING, ADS, EATING, RUN, POWERS,
 } from '../config.js';
 import BlackHole, { radiusForMass } from '../objects/BlackHole.js';
 import Spawner from '../systems/spawner.js';
@@ -16,11 +16,14 @@ import { ClipRecorder, downloadClip, recordingSupported } from '../systems/recor
 import { showRewardedAd } from '../systems/ads.js';
 import { createScenario } from '../systems/scenarios.js';
 import RunController from '../systems/run.js';
+import Autopilot, { autopilotEnabled, devParams } from '../systems/autopilot.js';
+import Powers from '../systems/powers.js';
 import { getLevel, LEVEL_COUNT } from '../data/levels.js';
 import { getScenario } from '../data/scenarios.js';
 import Hud from '../ui/hud.js';
 import { toast, clear } from '../ui/dom.js';
 import { renderPause, renderLevelComplete, renderLevelFailed, renderScenarioEnd, renderRunEnd, closeModal } from '../ui/overlays.js';
+import { renderPowerPick } from '../ui/powerPick.js';
 import { showScienceCard } from '../ui/scienceCard.js';
 import { highestTierUnlocked } from '../ui/menus.js';
 import * as flow from '../flow.js';
@@ -44,6 +47,8 @@ export default class GameScene extends Phaser.Scene {
     this.scenarioId = data?.scenario ?? 'earth';
     // Phaser reuses this scene object between games: clear anything a previous game left.
     this.run = null;
+    this.powers = null;
+    this.rng = Math.random; // seeded for the Daily Universe
     this.scenario = null;
     this.boss = null;
     this.level = null;
@@ -70,7 +75,8 @@ export default class GameScene extends Phaser.Scene {
     this.speedMultiplier = upgrades.speedMultiplier();
     this.pullRange = upgrades.pullRange();
     if (this.mode === 'run') {
-      const era = RUN.eras[0];
+      this.startEraIndex = Phaser.Math.Clamp((+devParams().get('era') || 1) - 1, 0, RUN.eras.length - 1);
+      const era = RUN.eras[this.startEraIndex];
       this.startMass = era.startMass * upgrades.startMassMultiplier();
       this.target = era.goal;
       weights = era.weights;
@@ -150,12 +156,18 @@ export default class GameScene extends Phaser.Scene {
         onPlayerEaten: (o) => this.onPlayerEaten(o),
         onFeed: (o, dm) => this.onFeed(o, dm),
         onOtherEat: (o, eater) => this.onOtherEat(o, eater),
+        onShatter: (info) => this.onShatter(info),
       },
     });
 
     // Scenario scripts may move the black hole and place objects before spawning.
     if (this.mode === 'scenario') this.scenario = createScenario(this.scenarioId, this);
-    if (this.mode === 'run') this.run = new RunController(this);
+    if (this.mode === 'run') {
+      this.powers = new Powers(this, this.rng);
+      this.run = new RunController(this);
+      for (const id of (devParams().get('powers') ?? '').split(',').filter(Boolean)) this.powers.take(id);
+    }
+    this.autopilot = autopilotEnabled() && (this.mode === 'run' || this.mode === 'level') ? new Autopilot(this) : null;
     cam.setZoom((CAMERA.screenRadius / this.bh.radius) * this.zoomBase);
     cam.centerOn(this.bh.x, this.bh.y);
     this.spawner.populate(this.bh, this.viewAt(this.bh.x, this.bh.y, cam.zoom));
@@ -174,9 +186,13 @@ export default class GameScene extends Phaser.Scene {
         onStopRecord: () => this.stopRecording(),
         onSpawn: (type) => this.spawner.spawnNear(type, this.bh),
         onTier: (t) => flow.startSandbox(t),
+        onJets: () => this.powers?.fireJets(),
       },
     });
-    if (this.run) this.hud.setEra(this.run.era);
+    if (this.run) {
+      this.hud.setEra(this.run.era);
+      this.hud.setPowers(this.powers.owned(), [...this.powers.synergies]);
+    }
     this.scene.launch('UIScene', { mode: this.mode });
     this.ui = this.scene.get('UIScene');
 
@@ -188,6 +204,7 @@ export default class GameScene extends Phaser.Scene {
       this.wasd = this.input.keyboard.addKeys('W,A,S,D');
       this.input.keyboard.on('keydown-ESC', () => this.pauseGame());
       this.input.keyboard.on('keydown-P', () => this.pauseGame());
+      this.input.keyboard.on('keydown-SPACE', () => this.powers?.fireJets());
     }
 
     this.onVisibility = () => {
@@ -258,6 +275,11 @@ export default class GameScene extends Phaser.Scene {
     return this.realKg ?? massToKg(this.bh.mass);
   }
 
+  /** Pull range (× radius) after upgrades, quasar ignition and powers. */
+  effectivePullRange() {
+    return this.pullRange * (this.powers ? this.powers.pullRangeMul() : 1);
+  }
+
   // ---------------------------------------------------------------------------
   // Main loop
   // ---------------------------------------------------------------------------
@@ -270,6 +292,7 @@ export default class GameScene extends Phaser.Scene {
 
     let target = this.inputLocked || this.ended ? null : this.getPointerTarget();
     let dir = this.inputLocked || this.ended ? null : this.getKeyboardDirection();
+    if (!target && !dir && this.autopilot && !this.inputLocked && !this.ended) target = this.autopilot.target(dt);
     let controlled = false;
     if (this.scenario) {
       const r = this.scenario.update(dt, realDt, target || dir);
@@ -285,14 +308,24 @@ export default class GameScene extends Phaser.Scene {
     this.invulnerable -= dt;
     this.bigCooldown -= realDt;
 
-    const pulled = this.spawner.update(dt, time / 1000, {
+    // Gravitational Lens: the world slows near danger, you don't.
+    const worldDt = this.powers ? dt * this.powers.updateWorldScale(this.spawner.nearestGap, realDt) : dt;
+    const pw = this.powers;
+    const pulled = this.spawner.update(worldDt, time / 1000, {
       bh,
       danger: this.danger && !this.ended,
       feeding: this.feeding,
-      pullRange: this.pullRange,
+      pullRange: this.effectivePullRange(),
       boss: this.boss,
       feedRate: this.feedRate,
+      swirl: pw ? pw.swirl() : 0,
+      pullStrength: pw ? pw.pullStrengthMul() : 1,
+      shred: pw && !this.ended ? pw.shred() : null,
     });
+    if (pw) {
+      pw.update(dt);
+      this.spawner.hiddenChance = pw.hiddenChance();
+    }
     this.effects.update(dt);
     if (!this.ended) audio.setRumble(Math.min(1, pulled / 10 + (this.feedingNow ? 0.7 : 0)));
     this.feedingNow = false;
@@ -317,6 +350,7 @@ export default class GameScene extends Phaser.Scene {
         age: this.run.age(),
         evaporating: this.run.evaporating && this.run.lossRate > 0,
         quasar: this.run.era.quasar ? this.run.quasarMeter : undefined,
+        jets: this.powers?.has('jets') ? { charge: this.powers.jetCharge(), auto: this.powers.synergies.has('pulsar') } : null,
       });
     }
     if (this.recorder?.recording) this.hud.setRecTime(this.recorder.elapsed);
@@ -581,6 +615,40 @@ export default class GameScene extends Phaser.Scene {
     toast(`+${ADS.reviveSeconds} s`);
   }
 
+  /**
+   * Era change in a run: pause and let the player pick 1 of 3 cosmic powers.
+   * @param {() => void} done called after the pick (or right away if there's nothing to pick)
+   */
+  offerPowers(done) {
+    const pw = this.powers;
+    if (!pw || !pw.canOffer() || this.ended) {
+      done?.();
+      return;
+    }
+    const choices = pw.offer();
+    audio.setRumble(0);
+    this.scene.pause();
+    renderPowerPick({
+      era: this.run.era,
+      choices: choices.map((id) => ({ id, level: pw.level(id) + 1, synergy: pw.completesSynergy(id) })),
+      owned: pw.owned(),
+      synergies: [...pw.synergies],
+      onPick: (id) => {
+        closeModal();
+        const { synergies } = pw.take(id);
+        this.hud.setPowers(pw.owned(), [...pw.synergies]);
+        this.scene.resume();
+        if (synergies.length) {
+          const syn = synergies[0];
+          this.ui.showBanner('Synergy', syn.name, 2.4);
+          this.effects.shockwave(this.bh.x, this.bh.y, this.bh.radius * 9, COLORS.science, 1.2);
+          audio.chime();
+        }
+        done?.();
+      },
+    });
+  }
+
   /** Called by RunController when a run ends. */
   showRunEnd(r) {
     const save = getSave();
@@ -622,15 +690,18 @@ export default class GameScene extends Phaser.Scene {
     const ratio = obj.radius / bh.radius;
     const kgBefore = this.currentKg();
     // Scenarios add the full mass (they're about real objects); levels and sandbox use massGain.
-    const gain = obj.role === 'persistent' ? obj.mass : obj.mass * EATING.massGain;
+    let gain = obj.role === 'persistent' ? obj.mass : obj.mass * EATING.massGain * (this.run ? this.run.era.gain ?? 1 : 1);
+    if (obj.hidden) gain *= POWERS.lens.hiddenMass;
     bh.addMass(gain);
     if (this.realKg !== null && obj.realKg) this.realKg += obj.realKg * (obj.mass / obj.startMass);
     if (!this.ended) {
       this.eaten += gain;
-      if (obj.bonus > 1) this.bonusMass += gain * (obj.bonus - 1);
-      this.run?.onGain(gain, obj.bonus > 1 ? gain * (obj.bonus - 1) : 0);
+      const bonusMul = obj.hidden ? POWERS.lens.hiddenStardust : obj.bonus;
+      const bonus = bonusMul > 1 ? gain * (bonusMul - 1) : 0;
+      this.bonusMass += bonus;
+      this.run?.onGain(gain, bonus);
       this.objectsEaten++;
-      if (!this.biggest || obj.mass > this.biggest.mass) this.biggest = { name: obj.def.name, mass: obj.mass };
+      if (!this.biggest || obj.mass > this.biggest.mass) this.biggest = { name: obj.displayName ?? obj.def.name, mass: obj.mass };
     }
 
     const big = (obj.named || ratio >= EFFECTS.bigSwallowRatio) && this.bigCooldown <= 0;
@@ -654,7 +725,7 @@ export default class GameScene extends Phaser.Scene {
       this.shake(EFFECTS.eatShake, EFFECTS.shakeTime);
     }
 
-    if (obj.bonus > 1) {
+    if (obj.bonus > 1 || obj.hidden) {
       audio.sparkle();
       this.effects.debris(obj.x, obj.y, [COLORS.amber, 0xffe0b0], 6, bh);
     }
@@ -662,8 +733,10 @@ export default class GameScene extends Phaser.Scene {
     // Name label: always for named objects, otherwise for big-enough meals.
     if (obj.named) {
       this.ui.showLabel(obj.def.name, kgText(obj.realKg, 2), true);
+    } else if (obj.hidden) {
+      this.ui.showLabel(`Hidden ${obj.displayName ?? obj.def.name}`, `+${kgText(Math.max(0, this.currentKg() - kgBefore), 1)} · ×${POWERS.lens.hiddenStardust} SD`, false);
     } else if (ratio >= HUD.labelMinRatio || obj.type === 'rival') {
-      this.ui.showLabel(obj.rivalName ?? obj.def.name, `+${kgText(Math.max(0, this.currentKg() - kgBefore), 1)}`, false);
+      this.ui.showLabel(obj.rivalName ?? obj.displayName ?? obj.def.name, `+${kgText(Math.max(0, this.currentKg() - kgBefore), 1)}`, false);
     }
     this.scenario?.onSwallow?.(obj);
   }
@@ -681,6 +754,16 @@ export default class GameScene extends Phaser.Scene {
       this.effects.debris(obj.x + Math.cos(a) * r, obj.y + Math.sin(a) * r, obj.def.debris ?? [obj.def.color, COLORS.amber], 2, bh, bh.radius * 5);
     }
     if (Math.random() < 0.1) this.shake(0.003 + Math.min(0.006, bh.radius / obj.radius / 100), 0.1);
+  }
+
+  /** Something was smashed into chunks (jets, Tidal Shredder, events). */
+  onShatter(info) {
+    this.effects.flash(info.x, info.y, info.radius * 2.2, COLORS.science, 0.35);
+    this.effects.debris(info.x, info.y, info.debris, 6, this.bh, this.bh.radius * 4);
+    if (info.radius > this.bh.radius * 0.8) {
+      audio.collide();
+      this.shake(0.006, 0.15);
+    }
   }
 
   onOtherEat(obj, eater) {
@@ -708,7 +791,9 @@ export default class GameScene extends Phaser.Scene {
     audio.collide();
     this.shake(DANGER.shake, DANGER.shakeTime);
     if (obj.radius > bh.radius) {
-      const loss = bh.mass * upgrades.massLoss();
+      // In runs, a hit costs the same number of meals in every era (eras with a low gain lose less).
+      let loss = bh.mass * upgrades.massLoss() * (this.run ? Math.min(1, this.run.era.gain ?? 1) : 1);
+      if (this.powers) loss = this.powers.onHitLoss(loss);
       const floor = this.startMass * GROWTH.minMassFactor;
       const kgBefore = this.currentKg();
       bh.setMass(Math.max(floor, bh.mass - loss));
@@ -719,6 +804,7 @@ export default class GameScene extends Phaser.Scene {
 
   onPlayerEaten(rival) {
     if (this.ended || this.invulnerable > 0) return;
+    if (this.powers?.trySaveFromRival(rival)) return;
     this.killer = rival;
     this.effects.flash(this.bh.x, this.bh.y, this.bh.radius * 3, COLORS.rivalRing, 0.5);
     this.bh.setVisible(false);

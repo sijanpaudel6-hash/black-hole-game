@@ -75,7 +75,7 @@ async function start() {
   });
 
   // Handy for debugging in the browser console during development only.
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV || import.meta.env.MODE === 'bot') {
     window.game = game;
     window.flow = flow;
   }

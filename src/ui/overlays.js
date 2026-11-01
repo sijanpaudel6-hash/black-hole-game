@@ -154,6 +154,13 @@ export function renderScenarioEnd({ scenario, clipSaved, onReplay, onBack }) {
   on(node, { '[data-act=replay]': onReplay, '[data-act=back]': onBack });
 }
 
+function powersRow(summary) {
+  if (!summary || !summary.powers.length) return '';
+  const icons = summary.powers.map((x) => `<span class="pc-chip" title="${x.name}">${ICONS[x.id]}<b>${x.level}</b></span>`).join('');
+  const syn = summary.synergies.map((x) => `<span class="pc-chip science" title="${x.name}">${ICONS[x.id]}</span>`).join('');
+  return `<div class="row"><span class="label">Powers</span><span class="val end-powers">${icons}${syn}</span></div>`;
+}
+
 /**
  * End of a run: completed (the last light) or died (evaporated / swallowed).
  * @param {object} p see RunController.finishRun / GameScene.showRunEnd
@@ -183,6 +190,7 @@ export function renderRunEnd(p) {
           <div class="row"><span class="label">Peak mass</span><span class="val amber">${kgHtml(p.peakKg, 3)}</span></div>
           <div class="row"><span class="label">Objects consumed</span><span class="val">${formatInt(p.objects)} bodies</span></div>
           <div class="row"><span class="label">Run time</span><span class="val">${formatTimePrecise(p.time)}</span></div>
+          ${powersRow(p.powers)}
         </div>
         <div class="reward">
           <span>Stardust earned</span>

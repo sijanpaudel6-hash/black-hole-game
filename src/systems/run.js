@@ -16,7 +16,7 @@ const lerp = (a, b, t) => a + (b - a) * t;
 export default class RunController {
   constructor(scene) {
     this.scene = scene;
-    this.eraIndex = 0;
+    this.eraIndex = scene.startEraIndex ?? 0;
     this.eraTime = 0;
     this.eraEaten = 0;
     this.eraBonus = 0;
@@ -154,7 +154,7 @@ export default class RunController {
     this.eraTime = 0;
     const era = this.era;
     s.tierUpMoment(`Era ${era.id}`, era.name);
-    s.time.delayedCall(RUN.eraEndDelay * 1000, () => toast(era.blurb, 3500));
+    s.time.delayedCall(RUN.eraEndDelay * 1000, () => s.offerPowers(() => toast(era.blurb, 3500)));
     this.applyEra(false);
     const save = getSave();
     if (era.id > save.bestEra) {
@@ -353,6 +353,7 @@ export default class RunController {
       peakKg: this.peakKg,
       reward,
       newCards,
+      powers: s.powers?.summary(),
     });
   }
 }

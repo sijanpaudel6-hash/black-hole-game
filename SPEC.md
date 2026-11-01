@@ -1,10 +1,10 @@
 # Black Hole: Event Horizon — Game Spec
 
-Nov 1, 2026 · Sijan Paudel · **Updated after Session A to match the game as built**
+Nov 1, 2026 · Sijan Paudel · **Updated after Session B to match the game as built**
 
 ## Overview
 
-**You are a newborn black hole. Drag to move, swallow anything smaller than you, and grow from eating gas in the dawn of time to outliving every star.** The main mode is a run: one black hole's life through five eras of cosmic history, 10–15 minutes long. Satisfying to watch, and lightly educational.
+**You are a newborn black hole. Drag to move, swallow anything smaller than you, and grow from eating gas in the dawn of time to outliving every star.** The main mode is a run: one black hole's life through five eras of cosmic history, about 6–10 minutes long, with a cosmic power to pick at every era change. Satisfying to watch, and lightly educational.
 
 | Item | Decision |
 | --- | --- |
@@ -20,7 +20,7 @@ Nov 1, 2026 · Sijan Paudel · **Updated after Session A to match the game as bu
 
 | Mode | What it is |
 | --- | --- |
-| **Run** (main, the PLAY button) | "One Life of a Black Hole": one continuous run through five eras, Cosmic Dawn → Far Future. No timer. |
+| **Run** (main, the PLAY button) | "One Life of a Black Hole": one continuous run through five eras, Cosmic Dawn → Far Future. No timer. Pick 1 of 3 cosmic powers at each era change. |
 | **Classic** | The original 15 fixed levels in 5 tiers, each with a 3-minute timer and a target mass, ending with the Sagittarius A* boss. |
 | **Sandbox** | No timer, no danger, spawn any unlocked object, eat big things from the inside. Includes the "What if…?" scenarios. |
 
@@ -50,7 +50,7 @@ Nov 1, 2026 · Sijan Paudel · **Updated after Session A to match the game as bu
 - **Swallow rule**: an object is edible if its radius is below 90% of the black hole's radius. It is swallowed when its centre crosses the black hole's edge.
 - **Mass gain** *(tuned)*: swallowing adds **30% of the object's mass value** (`EATING.massGain = 0.3`). At 100% every level was over in 5–20 seconds; 0.3 makes levels and eras last minutes. Scenarios add the full mass of named objects.
 - **Pull zone**: edible objects within 3× the black hole's radius (more with Gravity Pull) accelerate toward it, faster the closer they are, and get dragged along so they fall in instead of slingshotting.
-- **Bigger objects** (radius larger than yours) have a thin red ring. Touching one bounces you off and costs 10% of current mass (less with Hawking Shield), then 0.9 s of protection. Collisions can't push you below 50% of the level/era starting mass.
+- **Bigger objects** (radius larger than yours) have a thin red ring. Touching one bounces you off and costs 10% of current mass (less with Hawking Shield; in runs × the era's gain when below 1), then 0.9 s of protection. Collisions can't push you below 50% of the level/era starting mass.
 - Objects too big to eat but not bigger than you just bounce you, with no mass loss.
 - **Mass display**: the counter shows kilograms. Game mass maps to kg by log-interpolating between anchors (`MASS_SCALE`): 300 ≈ the Moon, 1,000 ≈ Earth, 3,000 ≈ Jupiter, 10,000 ≈ the Sun. Milestones flash at 1 Moon, Earth, Jupiter and Sun mass, then 10, 1,000 and 1 million Suns. It's a game scale, not physics.
 
@@ -58,22 +58,48 @@ Nov 1, 2026 · Sijan Paudel · **Updated after Session A to match the game as bu
 
 **One run is one black hole's life, from the early universe to the far future.** Each era has a mass goal: the next era's starting mass. Reaching it triggers the tier-up moment (slow motion, zoom-out, shockwave, bass drop, banner) and the next era's objects take over. The HUD shows mass with a "Next era" bar, the cosmic age, and the current era with a five-step meter.
 
-| Era | Start mass → goal | Situation | Cosmic age shown |
-| --- | --- | --- | --- |
-| 1. Cosmic Dawn | 20 → 100 | A primordial black hole in a fog of gas. **Hawking evaporation**: you lose mass unless you keep eating. Stars are faint. | 50 → 200 million years |
-| 2. First Stars | 100 → 1,000 | Protostars and young stars light up the dark; blue giants are dangerous. | 200 million → 1 billion |
-| 3. Galaxy Era | 1,000 → 10,000 | Named rival black holes compete for the same food: outgrow them or flee. | 1 → 3 billion |
-| 4. Quasar Era | 10,000 → 100,000 | Food is everywhere (1.4× objects). Feed fast enough to **ignite as a quasar**. | 3 → 13.8 billion |
-| 5. Far Future | 100,000 → (75 s) | The stars are dying: eaten objects stop coming back, the stars fade out, gentle evaporation. Ends with **the last light**. | 10¹⁴ → 10¹⁰⁰ years |
+| Era | Start mass → goal | Gain *(tuned)* | Situation | Cosmic age shown |
+| --- | --- | --- | --- | --- |
+| 1. Cosmic Dawn | 20 → 100 | ×2.5 | A primordial black hole in a fog of gas. **Hawking evaporation**: you lose mass unless you keep eating. Stars are faint. | 50 → 200 million years |
+| 2. First Stars | 100 → 1,000 | ×0.45 | Protostars and young stars light up the dark; blue giants are dangerous. | 200 million → 1 billion |
+| 3. Galaxy Era | 1,000 → 10,000 | ×0.3 | Named rival black holes compete for the same food: outgrow them or flee. | 1 → 3 billion |
+| 4. Quasar Era | 10,000 → 100,000 | ×0.22 | Food is everywhere (1.4× objects). Feed fast enough to **ignite as a quasar**. | 3 → 13.8 billion |
+| 5. Far Future | 100,000 → (40 s) *(tuned)* | — | The stars are dying: eaten objects stop coming back, the stars fade out, gentle evaporation. Ends with **the last light**. | 10¹⁴ → 10¹⁰⁰ years |
+
+- **Era length** *(tuned)*: each era multiplies mass gained per swallow by its **gain** (`RUN.eras[].gain`, on top of `EATING.massGain`). Measured with the test bot (a greedy player, no powers): Cosmic Dawn ≈ 40 s, First Stars ≈ 55 s, Galaxy Era ≈ 80 s, Quasar Era ≈ 95 s, Far Future 40 s: about 5½ minutes of play for a good player, more like 7–9 for a new one once reading power cards and messages is added. Targets: Cosmic Dawn under 1 minute for a new player, Far Future 30–45 s, a full run 6–10 minutes.
+- **Hits scale with the era's gain** *(tuned)*: in runs, the mass lost to a collision is 10% × min(1, gain), so a hit costs about the same number of meals in every era. Without this the low-gain eras became a death spiral (one hit undid five meals).
 
 - **Hawking evaporation** (Cosmic Dawn, gently in the Far Future): mass lost per second = rate × eraStartMass × (eraStartMass ÷ mass)^exponent. Small black holes evaporate faster, like real Hawking radiation. Cosmic Dawn: rate 0.008, exponent 2; at the start you need to swallow roughly one small object every 2–3 seconds to break even. The HUD shows a blinking "Evaporating" warning.
 - **Death**: the run ends if you **evaporate** (mass below 50% of the run's starting mass, Cosmic Dawn only) or are **swallowed** by a bigger rival. Far Future evaporation can't kill you; that era always ends in the finale.
-- **Quasar ignition**: gain 12% of your mass within 4 seconds to ignite for 8 seconds: twin jets, a maxed-out disk, 1.8× pull range, then a 6 s cooldown. A "Quasar" meter on the HUD shows how close you are.
+- **Quasar ignition** *(tuned)*: gain 10% of your mass within 4 seconds to ignite for 8 seconds: twin jets, a maxed-out disk, 1.8× pull range, then a 6 s cooldown. A "Quasar" meter on the HUD shows how close you are.
 - **The last light** (end of the Far Future): everything fades away, the camera pulls back, and the black hole evaporates in little flashes of Hawking radiation until it's gone. Then a real fact: "When the last black holes evaporate, around 10¹⁰⁰ years from now, the universe goes dark."
 - **Run end screen**: how far you got (era meter), how long you lived (cosmic age), peak mass, objects eaten, run time, Stardust. Buttons: New run, Revive (rewarded ad, once per run, only after dying), ×2 Stardust (ad), Upgrades, Menu.
 - **Revive**: if you evaporated, your mass resets to the era's starting mass; if swallowed, you're moved away from the rival. 3 s of protection.
 - **Science cards** in runs: card 1 after your first run, card N on reaching era N. They pop up on the run end screen.
-- Powers (pick 1 of 3 at each era change) come in Session B; not built yet.
+- **Cosmic powers**: see below.
+
+### Cosmic powers (pick 1 of 3 at every era change)
+
+**At each of the four era changes the game pauses after the tier-up moment and offers 3 power cards; tap one.** Picking a power you own levels it up (max level 3). Owning two powers that pair up unlocks a **synergy**. Owned powers show as icons with level pips above the era panel; synergies show in science blue. Numbers live in `POWERS` in `config.js`, words in `src/data/powers.js`.
+
+| Power | Effect (level 1 → 3) |
+| --- | --- |
+| **Kerr Spin** | Your pull becomes a swirl: objects orbit before falling in. Pull range +20/35/50%; the disk spins faster. |
+| **Relativistic Jets** | A JETS button (or Space) fires twin jets along your motion for 0.9 s. They shatter objects up to 2.2/3/4× your size into edible chunks, knock bigger ones back and shrink rivals by 25%. Cooldown 7/5.5/4 s; length 7/9/11× your radius. |
+| **Tidal Shredder** | Objects up to 1.35/1.7/2.1× your size crumble into chunks when you pass close (instead of hurting you). |
+| **Dark Matter Halo** | Pull range +40/75/110% and pull strength +25/50/75%; a faint ring marks the halo's edge. |
+| **Gravitational Lens** | The world slows (to 65/55/45% speed) when you get near something dangerous; you don't. Hidden treasures appear: 8/12/16% of new objects glow blue and give 2.5× mass and 3× Stardust. |
+| **Hawking Bloom** | Getting hit releases a burst that blasts hazards away and protects you for 1.4–2.2 s; you lose 30/50/70% less mass. Level 3 adds **Last Gasp**: once per run, a rival about to eat you is blasted away instead. |
+
+| Synergy | Needs | Effect |
+| --- | --- | --- |
+| **Pulsar Lighthouse** | Kerr Spin + Jets | Jets fire on their own (15% faster cooldown) and sweep a full circle. |
+| **Accretion Buzzsaw** | Kerr Spin + Shredder | A spinning saw of debris: shred objects 0.6× bigger, from farther away, and the chunks swirl straight in. |
+| **Lensed Jets** | Jets + Lens | Jets are 50% longer and bend toward the nearest big object in front of them. |
+
+- **Offers**: 3 different powers that aren't maxed. 60% of the time one is a power you already own (to level it); 50% of the time, if possible, one completes a synergy. A card that completes a synergy has a blue border and says so; new cards list what they pair with.
+- Shattered objects become 4–6 **fragments** (80% of the mass, sized to be edible) that fly outward and get pulled in.
+- The run end screen lists the powers you took.
 
 ## Classic mode (the original 15 levels)
 
@@ -166,9 +192,10 @@ All values live in `config.js` (`OBJECTS`, `RIVAL`, `BOSS`).
 | Screen | Contents |
 | --- | --- |
 | Title | Logo, black hole art, **PLAY** (starts a run), best run, [Classic] [Sandbox] [Upgrades] [Settings] |
-| HUD (run) | Mass + "Next era" bar, cosmic age, era panel (meter, next era, Evaporating warning, Quasar meter), record, pause |
+| HUD (run) | Mass + "Next era" bar, cosmic age, era panel (meter, next era, Evaporating warning, Quasar meter), power icons, JETS button (with cooldown), record, pause |
+| Power pick | Era kicker, "Choose a power", 3 cards (icon, name, NEW / Level N, effect, level pips, synergy hint), your powers |
 | HUD (Classic) | Mass + target bar, time left, tier panel, record, pause |
-| Run end | Run complete / Run over, era reached, cosmic age, peak mass, objects, time, Stardust, New run / Revive / ×2 / Upgrades / Menu |
+| Run end | Run complete / Run over, era reached, cosmic age, peak mass, objects, time, powers, Stardust, New run / Revive / ×2 / Upgrades / Menu |
 | Classic level select | Star chart: tiers bottom to top, locked levels greyed, selected level bar, "Enter event horizon" |
 | Level complete / failed | Stats, Stardust, next-upgrade progress, Next / Retry, ad buttons |
 | Upgrade shop | Six upgrade cards with level, effect, cost; free upgrade via ad; launch run or level |
@@ -179,7 +206,7 @@ All values live in `config.js` (`OBJECTS`, `RIVAL`, `BOSS`).
 - **Sandbox** unlocks after clearing Classic level 3 **or** reaching First Stars in a run.
 - **Save data** (localStorage, wrapped in try/catch): Classic levels cleared, Stardust, upgrade levels, science cards, settings, last-played time (idle earnings), daily-bonus dates, runs played/completed, best era, best run mass. Saved after every level/run and when the tab is hidden.
 - **Ad hooks**: `showRewardedAd(onReward)` in `src/systems/ads.js` shows a placeholder and rewards after 1 s. Swap a real SDK in later behind that one function. Ads are always optional.
-- **Testing shortcuts**: `?unlockall` (every level, sandbox and card, not saved) and `?reset` (wipe the save).
+- **Testing shortcuts**: `?unlockall` (every level, sandbox and card, not saved) and `?reset` (wipe the save). In `npm run dev` only (or a `vite build --mode bot` test build): `?bot` lets a simple autopilot play (`src/systems/autopilot.js`, used to measure era lengths), `?era=3` starts a run at era 3, `?powers=jets,kerrSpin` grants powers.
 
 ## Built for YouTube Shorts
 
@@ -209,9 +236,9 @@ black-hole-game/
     ├── flow.js             moving between screens and scenes
     ├── scenes/             TitleScene (menus), GameScene (run/classic/sandbox/scenario), ShopScene, UIScene (in-canvas overlay)
     ├── objects/            BlackHole, SpaceObject
-    ├── systems/            run (eras), spawner, effects, textures, audio, recorder, scenarios, save, economy, ads, format, starfield
-    ├── data/               levels, scienceCards, scenarios, rivals
-    └── ui/                 HTML menus and HUD: dom, menus, hud, overlays, shop, scienceCard, icons, styles.css
+    ├── systems/            run (eras), powers, spawner, effects, textures, audio, recorder, scenarios, save, economy, ads, format, starfield, autopilot (dev bot)
+    ├── data/               levels, scienceCards, scenarios, rivals, powers
+    └── ui/                 HTML menus and HUD: dom, menus, hud, overlays, powerPick, shop, scienceCard, icons, styles.css
 ```
 
 ## Build order
@@ -233,7 +260,7 @@ black-hole-game/
 **Making it fun** (from *Making Black Hole Event Horizon Fun — Researched Ideas*):
 
 - [x] **Session A – Runs and eras.** One run through five eras with Hawking evaporation in Cosmic Dawn, era changes using the tier-up moment, quasar ignition, the last-light finale. Fixed levels kept as Classic.
-- [ ] **Session B – Cosmic powers.** Pick 1 of 3 at each era change; six powers and three synergies. **→ Playtest gate: do runs feel different from each other?**
+- [x] **Session B – Cosmic powers.** Pick 1 of 3 at each era change; six powers with 3 levels, three synergies, HUD icons, JETS button. Run length retuned to 6–10 minutes. **→ Playtest gate: do runs feel different from each other?**
 - [ ] **Session C – The Universe Talks Back.** Civilisation planets with eat/spare choices, boons and consequences, Galactic News ticker.
 - [ ] **Session D – Go viral.** Daily Universe seed, share card, Feed Your Hometown, "Eat the Milky Way in under 10 minutes".
 - [ ] **Session E – Cosmic events.** Supernova, tidal disruption, wandering black hole, wormhole, white hole, dark matter, merger chirp.
@@ -255,3 +282,19 @@ How to start each session, ready to paste:
 - Skins and cosmetics shop
 - iOS build, Steam build
 - Languages other than English
+
+## Decisions log
+
+**Choices made while building Sessions B–F without stopping to ask, and why.** Change any of them freely; most are a number in `config.js`.
+
+### Session B – Cosmic powers
+
+- **Picks happen at the 4 era changes only, not at the start of a run.** Cosmic Dawn is under a minute and teaches the basics (move, eat, don't evaporate); the first choice arrives right when the game opens up. Four picks with 3 levels each means a run can max one power, or spread across four, so runs differ.
+- **The game pauses for the pick** (instead of slow motion) so new players can read the cards on a small phone. The pick comes 1.6 s after the tier-up moment so the era-change spectacle isn't cut short.
+- **Jets use a dedicated JETS button** (bottom right, above pause; Space on desktop), not a tap on the play area: on a phone the whole screen is already "hold and drag to move", so a tap gesture would fight steering. Jets fire along your direction of motion, so aiming is just steering.
+- **Pulsar Lighthouse makes jets automatic** as well as sweeping, which is what makes it feel like a lighthouse and gives the synergy a clear "wow, it changed how I play" moment.
+- **Gravitational Lens slows the world, not you.** Slowing everything (you included) wouldn't help you dodge; slowing only the world is a real bullet-time advantage and shows "time slows near mass" on screen. "Hidden objects appear" became **treasures**: with the Lens, some new objects glow blue and are worth extra.
+- **Hawking Bloom triggers on hits** (the moment you lose mass), not on evaporation, which is continuous and would fire constantly. Level 3's Last Gasp gives one survivable mistake per run, which suits the "one life" structure.
+- **Era length is tuned with a per-era `gain`** rather than new goals, so era masses (and every object size that depends on them) stay the same. Cosmic Dawn gets ×2.5 (it was ~3 minutes, now ~40 s), later eras get less than ×1 (they were over in 20–40 s once big objects became edible). Collision losses scale down with the gain so low-gain eras don't turn into a death spiral. Far Future went from 75 s to 40 s. A dev-only autopilot (`?bot`) measured the times; real players will be a bit slower, so the bot's ~6 minutes should land around 7–9 minutes for people.
+- **Quasar ignition threshold lowered** from 12% to 10% of your mass in 4 s, because the lower Quasar Era gain made ignition rarer.
+
