@@ -365,6 +365,11 @@ sup {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Long scrolling screens: items keep their size instead of squashing to fit. */
+.screen.scroll > * {
+  flex-shrink: 0;
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -1854,4 +1859,113 @@ sup {
   height: 16px;
   vertical-align: -2px;
   color: var(--science);
+}
+
+/* ---------- Cosmic Craft ---------- */
+
+.craft-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.craft-picks {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 252px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.craft-picks .label {
+  width: 45%;
+  text-align: center;
+}
+
+.craft-result {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 266px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+}
+
+.craft-result.new {
+  border-color: var(--science);
+}
+
+.craft-result .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.craft-result .headline {
+  margin: 8px 0 2px;
+}
+
+.craft-result p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.craft-tray-wrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 37%;
+  padding: 8px 16px 12px;
+  background: rgba(7, 8, 12, 0.92);
+  border-top: 1px solid var(--hairline);
+  display: flex;
+  flex-direction: column;
+}
+
+.craft-tray-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.craft-tray {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  align-content: start;
+  touch-action: pan-y;
+}
+
+.craft-item {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  background: var(--panel-solid);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+}
+
+.craft-item:active {
+  border-color: var(--amber);
+}
+
+.craft-item img {
+  width: 36px;
+  height: 36px;
+}
+
+.craft-item span {
+  font-size: 11px;
+  line-height: 13px;
+  text-align: center;
 }

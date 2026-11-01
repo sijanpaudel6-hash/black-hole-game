@@ -1,6 +1,6 @@
 # Black Hole: Event Horizon — Game Spec
 
-Nov 1, 2026 · Sijan Paudel · **Updated after Session E to match the game as built**
+Nov 1, 2026 · Sijan Paudel · **Updated after Session F to match the game as built**
 
 ## Overview
 
@@ -24,7 +24,7 @@ Nov 1, 2026 · Sijan Paudel · **Updated after Session E to match the game as bu
 | **Daily Universe** | A run with the same seed for everyone on the same UTC day, a daily modifier and a share card ("Universe #N"). |
 | **Milky Way challenge** | A run against the clock: clear Cosmic Dawn → Quasar Era in under 10 minutes. |
 | **Classic** | The original 15 fixed levels in 5 tiers, each with a 3-minute timer and a target mass, ending with the Sagittarius A* boss. |
-| **Sandbox** | No timer, no danger, spawn any unlocked object, eat big things from the inside. Includes the "What if…?" scenarios. |
+| **Sandbox** | No timer, no danger, spawn any unlocked object, eat big things from the inside. Includes the "What if…?" scenarios, Feed Your Hometown and Cosmic Craft. |
 
 **Rules for every Claude Code session** (paste this doc at the start):
 
@@ -143,6 +143,16 @@ Nov 1, 2026 · Sijan Paudel · **Updated after Session E to match the game as bu
 
 - **As What if…? scenarios** (Sandbox): A star goes supernova, Spaghettify a star, Runaway black hole, Through a wormhole, Meet a white hole, Eat dark matter (plus the existing Two black holes collide for the merger). Each starts at 10 Suns, auto-steers toward food if you don't touch the screen, ends on a real fact (wormholes and white holes say THEORETICAL / HYPOTHETICAL), and can auto-record like the others.
 - When the object pool is full (busy eras), events and civilisations reuse the farthest off-screen object instead of failing.
+
+## Cosmic Craft (Session F)
+
+**Collide two things and see what real physics makes.** Sandbox → **Cosmic Craft**. Recipes and words in `src/data/recipes.js`, rules in `src/systems/craft.js`, the lab in `src/scenes/CraftScene.js` + `src/ui/craft.js`.
+
+- **Start with 9 things**: Hydrogen, Dust, Ice, Gas cloud, Gravity, Time, Spin, Light, Dark matter. **44 hand-written recipes**, every one marked **REAL** with a one-line explanation, make **41 more things** (50 in all, every one reachable): elements (helium → beryllium-8 → carbon → oxygen → silicon → iron, water, gold), planets (dust → pebble → planetesimal → rocky planet; comets, gas giants, the Moon, ocean worlds), stars (protostar, star, blue giant, red giant, white dwarf, blue straggler, clusters), deaths (supernova, Type Ia, nova, kilonova, neutron star, pulsar, superbubble), black holes (black hole, spinning black hole, supermassive, quasar, tidal disruption, gravitational waves, photon ring, gravitational lens) and galaxies (spiral, elliptical).
+- **How it plays**: tap two items in the tray. They appear on either side of the screen, fly together, spin and collide in the canvas (flash, shockwaves, shake). A match pops the result in the middle with a card: REAL badge, **New discovery** (or "Already found"), the pair, and the real-science line (e.g. "Two neutron stars merging make a kilonova. In 2017 one (GW170817) was seen in both gravitational waves and light."). New things join the tray. An unknown pair bounces apart: "No reaction".
+- **Progress**: "Found N / 41" (every thing a recipe can make), saved with the date of each discovery. The Sandbox menu shows your count.
+- **Icons**: game objects reuse their textures (stars, planets, comets, neutron stars…); elements are orbs with their symbol; forces, explosions, black holes and galaxies have their own drawn icons.
+- **Hook for later**: `imagine()` in `src/systems/craft.js` is where an AI-made result for an unknown pair (marked IMAGINED, saved for every player, "First Discovery" credit) would come from a server. Offline it returns nothing.
 
 ## Built to go viral (Session D)
 
@@ -270,6 +280,7 @@ All values live in `config.js` (`OBJECTS`, `RIVAL`, `BOSS`).
 | Power pick | Era kicker, "Choose a power", 3 cards (icon, name, NEW / Level N, effect, level pips, synergy hint), your powers |
 | HUD (Classic) | Mass + target bar, time left, tier panel, record, pause |
 | Run end | Run complete / Run over / Daily Universe #N / Milky Way challenge, (daily: modifier, attempt; challenge: time and best times), Share your universe + [Copy text] [Save image], era reached, cosmic age, peak mass, objects, time, civilisations, Milky Way time, powers, Stardust, New run / Revive / ×2 / Upgrades / Menu |
+| Cosmic Craft | Found N / 41, the two picks, result card (REAL, New discovery, why), tray of discovered things, [Clear] |
 | Feed your hometown | Search box, up to 8 matching cities/countries, note that only cities and countries are listed |
 | Classic level select | Star chart: tiers bottom to top, locked levels greyed, selected level bar, "Enter event horizon" |
 | Level complete / failed | Stats, Stardust, next-upgrade progress, Next / Retry, ad buttons |
@@ -279,7 +290,7 @@ All values live in `config.js` (`OBJECTS`, `RIVAL`, `BOSS`).
 | Sandbox menu | Free play (choose starting tier), Feed your hometown, 11 "What if…?" scenarios, auto-record toggle |
 
 - **Sandbox** unlocks after clearing Classic level 3 **or** reaching First Stars in a run.
-- **Save data** (localStorage, wrapped in try/catch): Classic levels cleared, Stardust, upgrade levels, science cards, settings, last-played time (idle earnings), daily-bonus dates, runs played/completed, best era, best run mass, today's Daily Universe (attempts, best), Milky Way challenge best times. Saved after every level/run and when the tab is hidden.
+- **Save data** (localStorage, wrapped in try/catch): Cosmic Craft discoveries, Classic levels cleared, Stardust, upgrade levels, science cards, settings, last-played time (idle earnings), daily-bonus dates, runs played/completed, best era, best run mass, today's Daily Universe (attempts, best), Milky Way challenge best times. Saved after every level/run and when the tab is hidden.
 - **Ad hooks**: `showRewardedAd(onReward)` in `src/systems/ads.js` shows a placeholder and rewards after 1 s. Swap a real SDK in later behind that one function. Ads are always optional.
 - **Testing shortcuts**: `?unlockall` (every level, sandbox and card, not saved) and `?reset` (wipe the save). In `npm run dev` only (or a `vite build --mode bot` test build): `?bot` lets a simple autopilot play (`src/systems/autopilot.js`, used to measure era lengths), `?era=3` starts a run at era 3, `?powers=jets,kerrSpin` grants powers.
 
@@ -309,11 +320,11 @@ black-hole-game/
     ├── main.js             Phaser setup, fonts, start-up
     ├── config.js           every tunable number (eras, tiers, objects, economy, effects…)
     ├── flow.js             moving between screens and scenes
-    ├── scenes/             TitleScene (menus), GameScene (run/classic/sandbox/scenario), ShopScene, UIScene (in-canvas overlay)
+    ├── scenes/             TitleScene (menus), GameScene (run/classic/sandbox/scenario), ShopScene, UIScene (in-canvas overlay), CraftScene
     ├── objects/            BlackHole, SpaceObject
-    ├── systems/            run (eras), powers, civs, news, events, daily, rng, share, leaderboard, globe, spawner, effects, textures, audio, recorder, scenarios, save, economy, ads, format, starfield, autopilot (dev bot)
-    ├── data/               levels, scienceCards, scenarios, rivals, powers, civilisations, news, places + land (Natural Earth)
-    └── ui/                 HTML menus and HUD: dom, menus, hud, overlays, powerPick, hometown, shop, scienceCard, icons, styles.css
+    ├── systems/            run (eras), powers, civs, news, events, craft, craftTextures, daily, rng, share, leaderboard, globe, spawner, effects, textures, audio, recorder, scenarios, save, economy, ads, format, starfield, autopilot (dev bot)
+    ├── data/               levels, scienceCards, scenarios, rivals, powers, civilisations, news, recipes, places + land (Natural Earth)
+    └── ui/                 HTML menus and HUD: dom, menus, hud, overlays, powerPick, hometown, craft, shop, scienceCard, icons, styles.css
 ```
 
 ## Build order
@@ -339,7 +350,9 @@ black-hole-game/
 - [x] **Session C – The Universe Talks Back.** Civilisation planets with eat/spare choices, boons and consequences (fear, hostility, fleeing, hope), 365 hand-written lines, Galactic News ticker.
 - [x] **Session D – Go viral.** Daily Universe (UTC-date seed, daily modifier), share card (text + 9:16 image, share menu with copy/download fallback), Feed Your Hometown (Natural Earth cities and countries), Milky Way challenge with local best times.
 - [x] **Session E – Cosmic events.** Supernova, tidal disruption, runaway black hole, wormhole (theoretical), white hole (hypothetical), dark matter, merger chirp; as random run events and six new What if…? scenarios.
-- [ ] **Session F – Cosmic Craft (real recipes).**
+- [x] **Session F – Cosmic Craft (real recipes).** A collision lab in Sandbox: 9 starting things, 44 REAL recipes, 41 things to discover (50 in all), discoveries saved.
+
+- [ ] **Later – Live features** (need a small server and an AI account with a key you set up yourself; nothing in the game holds a key). Hooks are ready: choice percentages under the EAT / SPARE buttons (`Civs.choose`), a global Milky Way leaderboard (`submitTime` in `leaderboard.js`), AI-imagined Cosmic Craft results with shared First Discovery credit (`imagine` in `craft.js`), live AI civilisation messages (`Civs.messageFor`), Mission Control's rare lines. Each must keep working offline with today's behaviour as the fallback.
 
 How to start each session, ready to paste:
 
@@ -382,7 +395,7 @@ How to start each session, ready to paste:
 - **Eating is always worth it in the moment (+8% mass, +40 Stardust) and sparing is worth it later (a boon)**, so neither choice is "correct". Consequences are about the rest of the run: eaters face fear, missiles and fleeing planets; sparers get hopeful worlds. Sparing a hostile world calls a truce (forgets one meal) instead of a gift, so there's a way back from a bad reputation.
 - **Missiles are a nuisance, not a killer** (−2.5% mass, a shove), in keeping with a family-friendly tone and short runs.
 - **Galactic News runs in every era**, with jokes in the early eras about there being no one to report yet, so the ticker teaches players to look at it before civilisations appear.
-- **Headlines are about deeds, never about real people or places** (except your chosen hometown in Feed Your Hometown, Session D).
+- **Headlines are about your deeds, never about real people or places.**
 
 ### Session D – Go viral
 
@@ -406,4 +419,13 @@ How to start each session, ready to paste:
 - **Wormholes and white holes are always labelled** THEORETICAL / HYPOTHETICAL on screen, in the banner and in their scenario's fact, so the game never presents them as real.
 - **Dark matter is drawn as Einstein rings**, which is how astronomers actually find it (by the light it bends), and the Gravitational Lens power reveals it fully: a nice link between Sessions B and E.
 - **Real-science anchors**: RBH-1 (JWST, 2026) for the runaway, AT2019qiz for the tidal disruption, LIGO's chirp for mergers.
+
+### Session F – Cosmic Craft
+
+- **A lab, not physics-flinging in free play.** Infinite Craft's appeal is picking two things and seeing what happens; aiming collisions with a black hole that eats everything would hide that. The collision still plays out in the game canvas (fly together, flash, shockwave), so it looks like the game and can be recorded.
+- **Forces are items** (Gravity, Time, Spin, Light), as in Infinite Craft, because many real processes aren't two objects bumping: a gas cloud + gravity makes a protostar, a star + time makes a red giant, a neutron star + spin makes a pulsar.
+- **Every recipe is REAL and explained in one line**, with real events where possible (GW170817, GW200105, LIGO 2015, the EHT image of M87*, ZTF SLRN-2020, Theia). The Moon's giant impact is described as "most likely", because it is the leading explanation, not certain.
+- **Unknown pairs just don't react** instead of getting a made-up answer. IMAGINED results need an AI on a server (no keys in the game), so `imagine()` is the hook for "Later".
+- **"New discovery" is per player for now**; a shared "First Discovery" credit across all players needs a server too.
+- **Everything is reachable from the starting 9** (checked by a script that walks the recipes), so no dead ends.
 

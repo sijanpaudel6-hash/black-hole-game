@@ -10,6 +10,7 @@ import { TIERS, RUN, SANDBOX_UNLOCK_LEVEL, SANDBOX_UNLOCK_ERA } from '../config.
 import { massToKg, kgHtml, formatInt, formatTime } from '../systems/format.js';
 import { universeNumber, dailyModifier, dailyRecord } from '../systems/daily.js';
 import { bestTimes } from '../systems/leaderboard.js';
+import { craftProgress } from '../systems/craft.js';
 import { effects } from '../systems/economy.js';
 import { showScienceCard } from './scienceCard.js';
 import { audio } from '../systems/audio.js';
@@ -300,6 +301,7 @@ export function renderSandboxMenu() {
       <button class="btn-primary" data-act="free">Free play ${ICONS.play}</button>
       <div class="section-label label">What if…? · clip-sized scenes</div>
       <div class="stack">
+        <button class="scenario hometown-card craft-card" data-act="craft"><div><div class="head">${ICONS.craft} Cosmic Craft</div><div class="desc">Collide two things and see what real physics makes · found ${craftProgress().found} / ${craftProgress().total}</div></div><span class="go">Play ${ICONS.arrow}</span></button>
         <button class="scenario hometown-card" data-act="hometown"><div><div class="head">${ICONS.globe} Feed your hometown</div><div class="desc">Pick a city or country. Watch it get swallowed.</div></div><span class="go">Play ${ICONS.arrow}</span></button>
         ${scenarios}
       </div>
@@ -318,6 +320,7 @@ export function renderSandboxMenu() {
     },
     '[data-act=free]': () => flow.startSandbox(tier),
     '[data-act=hometown]': () => flow.goMenu('hometown'),
+    '[data-act=craft]': () => flow.startCraft(),
     '[data-scenario]': (_e, b) => flow.startScenario(b.dataset.scenario),
     '[data-setting]': (_e, b) => toggleSetting(b.dataset.setting, b),
   });

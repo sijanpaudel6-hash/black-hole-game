@@ -48,6 +48,11 @@ export function startSandbox(tier) {
   switchTo('GameScene', { mode: 'sandbox', tier });
 }
 
+/** Cosmic Craft lab (Sandbox). */
+export function startCraft() {
+  switchTo('CraftScene', {});
+}
+
 /** @param {object} [extra] scenario data (Feed Your Hometown: { place, land }) */
 export function startScenario(scenario, extra = {}) {
   switchTo('GameScene', { mode: 'scenario', scenario, ...extra });

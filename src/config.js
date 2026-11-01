@@ -484,6 +484,17 @@ export const EVENTS = {
 };
 
 // ---------------------------------------------------------------------------
+// Cosmic Craft (Sandbox): collide two things, see what real physics makes
+// ---------------------------------------------------------------------------
+// Recipes and words: src/data/recipes.js. Positions are fractions of the 720×1280 canvas.
+export const CRAFT = {
+  slotY: 0.3, // where the two picks sit (× height)
+  itemRadius: 70, // design px
+  resultRadius: 120,
+  flyTime: 0.7, // seconds for the two to fly together
+};
+
+// ---------------------------------------------------------------------------
 // Objects
 // ---------------------------------------------------------------------------
 // mass: game mass (SPEC.md). radius: world px, chosen so each object becomes edible at a

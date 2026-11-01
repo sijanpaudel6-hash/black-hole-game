@@ -15,6 +15,7 @@ import TitleScene from './scenes/TitleScene.js';
 import GameScene from './scenes/GameScene.js';
 import ShopScene from './scenes/ShopScene.js';
 import UIScene from './scenes/UIScene.js';
+import CraftScene from './scenes/CraftScene.js';
 
 loadSave();
 const settings = getSave().settings;
@@ -59,7 +60,7 @@ async function start() {
       powerPreference: 'high-performance',
     },
     input: { activePointers: 2 },
-    scene: [TitleScene, GameScene, ShopScene, UIScene],
+    scene: [TitleScene, GameScene, ShopScene, UIScene, CraftScene],
   });
   flow.initFlow(game);
   initUI(game); // before any scene starts, so menus can mount
