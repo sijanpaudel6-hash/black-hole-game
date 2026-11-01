@@ -272,9 +272,12 @@ export default class Spawner {
       if (!active) continue;
 
       const edible = obj.radius < edibleLimit;
-      if (edible !== obj.edible || obj.feeding) {
-        obj.edible = edible;
-        obj.setDepth(edible || obj.feeding ? DEPTH.edibleObjects : DEPTH.inedibleObjects);
+      obj.edible = edible;
+      // Edible things (and big things being eaten from the inside) draw under the black hole.
+      const under = edible || obj.feeding;
+      if (under !== obj.under) {
+        obj.under = under;
+        obj.setDepth(under ? DEPTH.edibleObjects : DEPTH.inedibleObjects);
       }
 
       const dx = bh.x - obj.x;

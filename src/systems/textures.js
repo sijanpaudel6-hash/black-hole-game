@@ -347,9 +347,9 @@ const DRAW = {
       ctx.beginPath();
       ctx.ellipse(c, c - R * 0.95, R * 0.6, R * 0.15, 0, 0, TAU);
       ctx.fill();
-      for (let i = 0; i < 14; i++) {
-        ctx.strokeStyle = `rgba(255,255,255,${rand(0.35, 0.7)})`;
-        ctx.lineWidth = R * rand(0.03, 0.07);
+      for (let i = 0; i < 10; i++) {
+        ctx.strokeStyle = `rgba(255,255,255,${rand(0.15, 0.35)})`;
+        ctx.lineWidth = R * rand(0.015, 0.035);
         ctx.beginPath();
         const x = c + rand(-R, R) * 0.8;
         const y = c + rand(-R, R) * 0.8;

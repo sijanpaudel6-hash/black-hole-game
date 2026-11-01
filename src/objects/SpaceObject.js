@@ -40,6 +40,7 @@ export default class SpaceObject extends Phaser.GameObjects.Image {
     this.named = !!def.named;
     this.bonus = def.bonus ?? 1;
     this.edible = null;
+    this.under = null;
     this.feeding = false;
     this.pulled = false;
     this.think = 0;
