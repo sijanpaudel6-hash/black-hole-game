@@ -168,6 +168,10 @@ export default class Civs {
     const bh = s.bh;
     if (s.ended) {
       this.closeChoice('end');
+      for (const m of this.missiles) {
+        m.alive = false;
+        m.img.setVisible(false);
+      }
       return;
     }
     const civ = this.active;

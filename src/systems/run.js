@@ -252,6 +252,7 @@ export default class RunController {
   /** Milky Way challenge: the run ends as soon as the Quasar Era is cleared. */
   finishChallenge() {
     const s = this.scene;
+    s.cosmic?.end();
     this.finished = true;
     this.challengeDone = true;
     s.ended = true;
@@ -266,6 +267,7 @@ export default class RunController {
   die(reason) {
     if (this.finished) return;
     const s = this.scene;
+    s.cosmic?.end();
     this.finished = true;
     this.deathReason = reason;
     s.ended = true;
@@ -310,6 +312,7 @@ export default class RunController {
   finale() {
     if (this.finished) return;
     const s = this.scene;
+    s.cosmic?.end();
     const bh = s.bh;
     this.finished = true;
     this.completed = true;
@@ -402,7 +405,9 @@ export default class RunController {
       milkyWayTime: this.milkyWayTime ?? null,
       powers: s.powers?.summary().powers ?? [],
     };
-    const dailyResult = s.daily ? recordDaily({ era: this.era.id, peakKg: this.peakKg, completed, share }) : null;
+    // A revived run ends twice; it counts as one Daily Universe attempt.
+    const dailyResult = s.daily && !this.dailyRecorded ? recordDaily({ era: this.era.id, peakKg: this.peakKg, completed, share }) : null;
+    if (s.daily) this.dailyRecorded = true;
     writeSave();
     s.showRunEnd({
       share,
