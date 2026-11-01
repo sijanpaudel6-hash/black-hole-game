@@ -175,6 +175,7 @@ export default class RunController {
     const era = this.era;
     s.tierUpMoment(`Era ${era.id}`, era.name);
     s.civs?.onEraChange();
+    s.cosmic?.onEraChange();
     s.news?.push('era', { era: era.id });
     s.time.delayedCall(RUN.eraEndDelay * 1000, () => s.offerPowers(() => toast(era.blurb, 3500)));
     this.applyEra(false);

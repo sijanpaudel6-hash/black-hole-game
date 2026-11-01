@@ -1,6 +1,6 @@
 # Black Hole: Event Horizon — Game Spec
 
-Nov 1, 2026 · Sijan Paudel · **Updated after Session D to match the game as built**
+Nov 1, 2026 · Sijan Paudel · **Updated after Session E to match the game as built**
 
 ## Overview
 
@@ -126,6 +126,23 @@ Nov 1, 2026 · Sijan Paudel · **Updated after Session D to match the game as bu
 
 - **Galactic News**: a ticker under the top HUD (in the canvas, so it's in clips; it moves below the mass panel while recording). Pre-written funny headlines (`src/data/news.js`) report what you do: eating or sparing civilisations, big swallows, eating rivals, quasar ignition, synergies, new powers, milestones, era changes. When nothing has happened for 28–40 s an era-flavoured filler runs ("Galactic News will begin as soon as someone invents news"). Each shows 6.5 s; long ones scroll.
 - **Hook for later**: `Civs.messageFor()` is the one place a message is chosen, so a live AI message (from a small server, never with a key in the game) can replace it, with this bank as the offline fallback. Choice percentages ("only 14% spared them") need a server too and stay in "Later"; the decision screen is built so a percentage line can be added under the buttons.
+
+## Cosmic events (Session E)
+
+**Short situations from real astrophysics that break up a run, one at a time.** The first comes 22 s into an era, then one every 38–55 s (halved by the "Restless cosmos" daily modifier), never while a civilisation is talking. Each opens with a banner, a scanner arrow and a Galactic News headline. Numbers in `EVENTS` (`config.js`), code in `src/systems/events.js`.
+
+| Event | Eras | What happens |
+| --- | --- | --- |
+| **Supernova** | 2, 3, 4 | A blue giant (1.6× your size) pulses faster and faster for 3 s, collapses, and explodes: a flash, shockwaves that shove you and everything nearby, a ring of 22 edible debris chunks flying outward, and a neutron star left behind (a hefty meal). |
+| **Tidal disruption** | 3, 4, 5 | A star bigger than you is aimed to pass just beside you. It stretches toward you as it nears; inside 2.2× your radius it is shredded into a stream of 16 chunks that swirl into you ("SPAGHETTIFIED!"). |
+| **Runaway black hole** | 3, 4, 5 | A black hole 3× your mass races across your path at 7 radii/s for 11 s, tugging on everything (you too). It can eat you. Behind it, a wake of newborn stars you can eat, as seen behind the real runaway black hole RBH-1. |
+| **Wormhole** *(theoretical)* | 2, 3, 4 | A swirling portal for 16 s. Get close and it pulls you in; you come out 3.5 screens away next to a feast of 22 meals. Labelled THEORETICAL. |
+| **White hole** *(hypothetical)* | 4, 5 | A blinding white disc for 15 s that pushes you away and spits out matter: mostly edible chunks, a quarter of them too big to touch. Labelled HYPOTHETICAL. |
+| **Dark matter** | all | 9 invisible clumps, shown only as faint rings of bent starlight (fully visible with the Gravitational Lens power). Each adds 1.5% mass. |
+| **Merger chirp** | any | Every time you eat a rival black hole: gravitational-wave rings, a zoom pulse, a shake and a rising "chirp" sound like LIGO's. |
+
+- **As What if…? scenarios** (Sandbox): A star goes supernova, Spaghettify a star, Runaway black hole, Through a wormhole, Meet a white hole, Eat dark matter (plus the existing Two black holes collide for the merger). Each starts at 10 Suns, auto-steers toward food if you don't touch the screen, ends on a real fact (wormholes and white holes say THEORETICAL / HYPOTHETICAL), and can auto-record like the others.
+- When the object pool is full (busy eras), events and civilisations reuse the farthest off-screen object instead of failing.
 
 ## Built to go viral (Session D)
 
@@ -259,7 +276,7 @@ All values live in `config.js` (`OBJECTS`, `RIVAL`, `BOSS`).
 | Upgrade shop | Six upgrade cards with level, effect, cost; free upgrade via ad; launch run or level |
 | Science card / log | Title, short real fact, diagram, tags, close; the log lists all five cards |
 | Settings | Music, sound effects, Low graphics, auto-record scenarios, language (English), reset progress |
-| Sandbox menu | Free play (choose starting tier), Feed your hometown, "What if…?" scenarios, auto-record toggle |
+| Sandbox menu | Free play (choose starting tier), Feed your hometown, 11 "What if…?" scenarios, auto-record toggle |
 
 - **Sandbox** unlocks after clearing Classic level 3 **or** reaching First Stars in a run.
 - **Save data** (localStorage, wrapped in try/catch): Classic levels cleared, Stardust, upgrade levels, science cards, settings, last-played time (idle earnings), daily-bonus dates, runs played/completed, best era, best run mass, today's Daily Universe (attempts, best), Milky Way challenge best times. Saved after every level/run and when the tab is hidden.
@@ -274,7 +291,7 @@ All values live in `config.js` (`OBJECTS`, `RIVAL`, `BOSS`).
 - **Named-object labels** with real masses ("EARTH · 5.97 × 10²⁴ kg") and swallow labels next to the black hole.
 - **Big-swallow close-up**, milestones, the tier-up / era zoom-out, quasar ignition and the last-light finale are all clip moments.
 - **Sound** is synthesised with Web Audio: rumble rising with pull, swallow whoomps, bass drops, collision thuds, a quiet ambient music pad. Sound is included in clips.
-- **"What if…?" scenarios** (Sandbox): Black hole vs Earth, vs the Sun, Eat the Solar System, Two black holes collide, Tiny vs Sagittarius A*. Each opens with a caption, tracks real kilograms, ends with a real fact on a dark frame, and can auto-record.
+- **"What if…?" scenarios** (Sandbox): Black hole vs Earth, vs the Sun, Eat the Solar System, Two black holes collide, Tiny vs Sagittarius A*, plus the cosmic events (supernova, spaghettify a star, runaway black hole, wormhole, white hole, dark matter) and Feed Your Hometown. Each opens with a caption, tracks real kilograms, ends with a real fact on a dark frame, and can auto-record.
 
 ## Technical requirements and file structure
 
@@ -294,7 +311,7 @@ black-hole-game/
     ├── flow.js             moving between screens and scenes
     ├── scenes/             TitleScene (menus), GameScene (run/classic/sandbox/scenario), ShopScene, UIScene (in-canvas overlay)
     ├── objects/            BlackHole, SpaceObject
-    ├── systems/            run (eras), powers, civs, news, daily, rng, share, leaderboard, globe, spawner, effects, textures, audio, recorder, scenarios, save, economy, ads, format, starfield, autopilot (dev bot)
+    ├── systems/            run (eras), powers, civs, news, events, daily, rng, share, leaderboard, globe, spawner, effects, textures, audio, recorder, scenarios, save, economy, ads, format, starfield, autopilot (dev bot)
     ├── data/               levels, scienceCards, scenarios, rivals, powers, civilisations, news, places + land (Natural Earth)
     └── ui/                 HTML menus and HUD: dom, menus, hud, overlays, powerPick, hometown, shop, scienceCard, icons, styles.css
 ```
@@ -321,7 +338,7 @@ black-hole-game/
 - [x] **Session B – Cosmic powers.** Pick 1 of 3 at each era change; six powers with 3 levels, three synergies, HUD icons, JETS button. Run length retuned to 6–10 minutes. **→ Playtest gate: do runs feel different from each other?**
 - [x] **Session C – The Universe Talks Back.** Civilisation planets with eat/spare choices, boons and consequences (fear, hostility, fleeing, hope), 365 hand-written lines, Galactic News ticker.
 - [x] **Session D – Go viral.** Daily Universe (UTC-date seed, daily modifier), share card (text + 9:16 image, share menu with copy/download fallback), Feed Your Hometown (Natural Earth cities and countries), Milky Way challenge with local best times.
-- [ ] **Session E – Cosmic events.** Supernova, tidal disruption, wandering black hole, wormhole, white hole, dark matter, merger chirp.
+- [x] **Session E – Cosmic events.** Supernova, tidal disruption, runaway black hole, wormhole (theoretical), white hole (hypothetical), dark matter, merger chirp; as random run events and six new What if…? scenarios.
 - [ ] **Session F – Cosmic Craft (real recipes).**
 
 How to start each session, ready to paste:
@@ -379,4 +396,14 @@ How to start each session, ready to paste:
 - **Feed Your Hometown uses Natural Earth** (public domain, no attribution required, though it's credited) instead of GeoNames (CC BY): simpler licence, and it includes country label points and land outlines, so the globe shows the real coastline around your city. 7,270 places covers capitals, big cities and many towns; the search also matches countries for smaller places.
 - **The hometown ends on a reassuring real fact** (Gaia BH1 is 1,560 light-years away, so your city is safe), which keeps it family-friendly and educational after a dramatic clip.
 - **The "Comment your city" call to action is drawn in the canvas** at the end of the scene so it's in the saved clip, which is the whole point of the comment-driven loop.
+
+### Session E – Cosmic events
+
+- **One event at a time, never during a civilisation's message**, so each is readable on a phone and gets its own moment in a clip. 38–55 s apart means 1–2 per era: enough surprise without turning runs into chaos.
+- **Each era gets the events that fit it**: no planets or runaway supermassive black holes in First Stars, no supernovae in the Far Future (no big young stars left); dark matter is everywhere, as in reality.
+- **Every event is a feast with a twist** (debris, a stream, a wake of stars, a portal to food, spat-out chunks), so events help as often as they threaten, which keeps the 6–10 minute run length.
+- **The runaway black hole can eat you** and keeps flying straight after its 11 s, so it never turns into a rival that hunts you down.
+- **Wormholes and white holes are always labelled** THEORETICAL / HYPOTHETICAL on screen, in the banner and in their scenario's fact, so the game never presents them as real.
+- **Dark matter is drawn as Einstein rings**, which is how astronomers actually find it (by the light it bends), and the Gravitational Lens power reveals it fully: a nice link between Sessions B and E.
+- **Real-science anchors**: RBH-1 (JWST, 2026) for the runaway, AT2019qiz for the tidal disruption, LIGO's chirp for mergers.
 

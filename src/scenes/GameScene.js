@@ -23,6 +23,7 @@ import Autopilot, { autopilotEnabled, devParams } from '../systems/autopilot.js'
 import Powers from '../systems/powers.js';
 import Civs from '../systems/civs.js';
 import News from '../systems/news.js';
+import CosmicEvents from '../systems/events.js';
 import { getLevel, LEVEL_COUNT } from '../data/levels.js';
 import { getScenario } from '../data/scenarios.js';
 import Hud from '../ui/hud.js';
@@ -58,6 +59,7 @@ export default class GameScene extends Phaser.Scene {
     this.powers = null;
     this.civs = null;
     this.news = null;
+    this.cosmic = null; // cosmic events (not `this.events`: that's Phaser's event emitter)
     this.daily = null; // { key, universe, seed } in a Daily Universe run
     this.mod = {}; // today's Daily Universe modifier (DAILY.modifiers in config.js)
     this.scenario = null;
@@ -67,6 +69,7 @@ export default class GameScene extends Phaser.Scene {
     this.recorder = null;
     this.fixedZoom = null;
     this.feedRate = undefined;
+    this.realKgScale = 0; // event scenarios: kg = this × game mass
     this.stoppingRecording = false;
   }
 
@@ -178,6 +181,7 @@ export default class GameScene extends Phaser.Scene {
     });
 
     // Scenario scripts may move the black hole and place objects before spawning.
+    if (this.mode === 'run' || this.mode === 'scenario') this.cosmic = new CosmicEvents(this, this.rngFor('events'));
     if (this.mode === 'scenario') this.scenario = createScenario(this.scenarioId, this);
     if (this.mode === 'run') {
       this.powers = new Powers(this, this.rngFor('powers'));
@@ -310,6 +314,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   currentKg() {
+    if (this.realKgScale) return this.realKgScale * this.bh.mass;
     return this.realKg ?? massToKg(this.bh.mass);
   }
 
@@ -346,6 +351,7 @@ export default class GameScene extends Phaser.Scene {
     this.invulnerable -= dt;
     this.bigCooldown -= realDt;
 
+    if (this.cosmic && !this.ended) this.cosmic.update(dt);
     // Gravitational Lens: the world slows near danger, you don't.
     const worldDt = this.powers ? dt * this.powers.updateWorldScale(this.spawner.nearestGap, realDt) : dt;
     const pw = this.powers;
@@ -751,6 +757,7 @@ export default class GameScene extends Phaser.Scene {
     if (this.civs) {
       this.civs.onSwallow(obj);
       if (obj.type === 'rival') this.news?.push('rivalEaten', { rival: obj.rivalName ?? 'A rival' });
+      if (obj.type === 'rival') this.cosmic?.merger(bh.x, bh.y, bh.radius);
       else if (!obj.civ && big) this.news?.push('bigSwallow', { object: `${/^[aeiou]/i.test(obj.def.name) ? 'an' : 'a'} ${(obj.displayName ?? obj.def.name).toLowerCase()}` });
     }
     this.effects.spaghetti(obj, bh, big);

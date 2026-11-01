@@ -278,6 +278,68 @@ const SCRIPTS = {
   },
 };
 
+// ---- Cosmic events as What if…? scenes (Session E) ----
+
+/** Steer toward the nearest thing you can eat when the player isn't touching the screen. */
+function autoEatTarget(scene) {
+  const bh = scene.bh;
+  let best = null;
+  let bestD = Infinity;
+  for (const o of scene.spawner.objects) {
+    if (!o.inUse || !o.visible || o.behaviour === 'rival' || o.radius >= bh.radius * 0.9) continue;
+    const d = Math.hypot(o.x - bh.x, o.y - bh.y);
+    if (d < bestD) {
+      bestD = d;
+      best = o;
+    }
+  }
+  return best ? { x: best.x, y: best.y } : undefined;
+}
+
+function eventScene(type, { mass = 2000, kg = 10 * SUN_KG, delay = 1.2, at = null, autoEat = true, after = 1.6, seekAfter = 0 } = {}) {
+  return (scene) => {
+    setPlayer(scene, mass, kg);
+    // The kg counter follows the black hole's growth (10 Suns at the start).
+    scene.realKg = null;
+    scene.realKgScale = kg / mass;
+    scene.zoomBase = 0.8;
+    let t = 0;
+    let started = false;
+    let done = false;
+    return {
+      update(dt, _realDt, hasInput) {
+        t += dt;
+        if (!started && t > delay && scene.cosmic) {
+          started = true;
+          const bh = scene.bh;
+          scene.cosmic.start(type, { scenario: true, at: at ? { x: bh.x + at[0] * bh.radius, y: bh.y + at[1] * bh.radius } : null });
+          if (scene.cosmic.active) {
+            scene.cosmic.active.onEnd = () => {
+              if (!done) {
+                done = true;
+                scene.finishScenario(after);
+              }
+            };
+          }
+        }
+        if (hasInput || !started) return {};
+        // Wormhole: drift over, then dive in.
+        const ev = scene.cosmic?.active;
+        if (seekAfter && ev && !ev.used && t > delay + seekAfter && ev.x !== undefined) return { target: { x: ev.x, y: ev.y } };
+        if (autoEat || ev?.used) return { target: autoEatTarget(scene) };
+        return {};
+      },
+    };
+  };
+}
+
+SCRIPTS.supernova = eventScene('supernova', { at: [0, -6], after: 0.5 });
+SCRIPTS.tidal = eventScene('tidal', { at: [7, -6] });
+SCRIPTS.wanderer = eventScene('wanderer', { autoEat: true });
+SCRIPTS.wormhole = eventScene('wormhole', { at: [0, -10], autoEat: false, seekAfter: 2.5, after: 2.4 });
+SCRIPTS.whitehole = eventScene('whiteHole', { at: [0, -6], autoEat: false });
+SCRIPTS.darkmatter = eventScene('darkMatter', { at: [0, -3] });
+
 SCRIPTS.hometown = (scene) => {
   // Feed Your Hometown: Earth turned so the chosen place faces you; the black hole flies
   // in, swallows it and leaves a hole. Cities and countries only (see src/ui/hometown.js).

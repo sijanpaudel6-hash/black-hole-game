@@ -450,6 +450,40 @@ export const HOMETOWN = {
 };
 
 // ---------------------------------------------------------------------------
+// Cosmic events (src/systems/events.js): random 10–30 s situations in runs, and What if…?s
+// ---------------------------------------------------------------------------
+// Sizes are × your radius, speeds in your radii per second, shares are "eating it adds this
+// share of your mass". perEra lists which events can happen in each era.
+export const EVENTS = {
+  firstDelay: 22, // seconds into an era before the first event
+  interval: [38, 55], // seconds between events
+  perEra: {
+    1: ['darkMatter'],
+    2: ['supernova', 'darkMatter', 'wormhole'],
+    3: ['supernova', 'tidal', 'wanderer', 'wormhole', 'darkMatter'],
+    4: ['supernova', 'tidal', 'wanderer', 'wormhole', 'whiteHole', 'darkMatter'],
+    5: ['wanderer', 'whiteHole', 'darkMatter', 'tidal'],
+  },
+  supernova: {
+    starSize: 1.6, warn: 3, collapse: 0.45, linger: 8,
+    debris: 22, debrisSize: [0.3, 0.55], debrisSpeed: 3.2, debrisShare: 0.008,
+    neutronShare: 0.06, shockRadius: 13, push: 1100,
+  },
+  tidal: { starSize: 1.5, missBy: 3, speed: 2.2, tidalRange: 2.2, pieces: 16, inward: 2.4, linger: 6, maxTime: 14 },
+  wanderer: {
+    massRatio: 3, startDistance: 1.3, speed: 7, missBy: 5, life: 11, pullRange: 7, pull: 900, playerPull: 500,
+    trailEvery: 0.3, starSize: [0.35, 0.6], starShare: 0.012,
+  },
+  wormhole: { size: 1.5, life: 16, pull: 500, exitDistance: 3.5, feast: 22 },
+  whiteHole: {
+    size: 1.4, life: 15, every: 0.28, speed: 5, push: 700, pushRange: 5,
+    bigChance: 0.25, bigSize: [1.15, 1.5], smallSize: [0.3, 0.55], smallShare: 0.006,
+  },
+  darkMatter: { clumps: 9, size: [0.4, 0.7], spread: 7, share: 0.015, alpha: 0.35, lensAlpha: 0.9, life: 40 },
+  merger: { rings: 6, ringEvery: 0.12, chirpTime: 1.4 },
+};
+
+// ---------------------------------------------------------------------------
 // Objects
 // ---------------------------------------------------------------------------
 // mass: game mass (SPEC.md). radius: world px, chosen so each object becomes edible at a
@@ -562,6 +596,11 @@ export const OBJECTS = {
   neutronStar: {
     name: 'Neutron star', mass: 1, radius: 10, behaviour: 'drift',
     drift: [0.2, 0.4], spin: [4, 6], color: 0xcfe4ff, texRadius: 40, glow: true,
+  },
+  // Dark matter clump: invisible except as a faint ring of bent starlight (mass set when made).
+  darkMatter: {
+    name: 'Dark matter', mass: 1, radius: 10, behaviour: 'drift',
+    drift: [0.1, 0.3], spin: [0.2, 0.5], color: 0x9fc7ff, texRadius: 48,
   },
   // Chunks of something shattered by jets, the shredder or a cosmic event (size and mass set when made).
   fragment: {

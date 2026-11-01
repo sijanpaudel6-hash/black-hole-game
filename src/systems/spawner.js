@@ -78,8 +78,29 @@ export default class Spawner {
     return this.types.find((t) => t !== 'rival') ?? this.types[0];
   }
 
-  take() {
-    return this.objects.find((o) => !o.inUse) ?? null;
+  /** A free pooled object; with `steal`, reuse a far-off one if the pool is full. */
+  take(steal = true) {
+    return this.objects.find((o) => !o.inUse) ?? (steal ? this.steal() : null);
+  }
+
+  /**
+   * Pool full (busy eras): reuse the farthest plain root object that's off-screen, so
+   * events, civilisations and shattering always get the objects they need.
+   */
+  steal() {
+    const v = this.view();
+    let best = null;
+    let bestD = -1;
+    for (const o of this.objects) {
+      if (!o.inUse || o.role !== 'root' || o.visible || o.type === 'rival' || o.civ || o.wanderer) continue;
+      const d = Math.hypot(o.x - v.cx, o.y - v.cy);
+      if (d > bestD) {
+        bestD = d;
+        best = o;
+      }
+    }
+    if (best) best.release();
+    return best;
   }
 
   // The camera's visible area in world space. Computed from scroll and zoom directly:
@@ -139,7 +160,7 @@ export default class Spawner {
     for (const spec of OBJECTS[type].children ?? []) {
       const n = Phaser.Math.Between(spec.count[0], spec.count[1]);
       for (let i = 0; i < n; i++) {
-        const child = this.take();
+        const child = this.take(false); // moons are optional: never evict for them
         if (!child) return;
         child.reset(spec.type, x, y, { role: 'extra', parent: obj, orbitRadius: spec.orbitRadius, orbitPeriod: spec.orbitPeriod });
       }
@@ -527,6 +548,7 @@ export default class Spawner {
 
   updateRival(r, dt, ctx, scale) {
     const { bh } = ctx;
+    if (r.wanderer) r.think = 1; // a runaway black hole (cosmic event) just keeps going
     r.think -= dt;
     if (r.think <= 0) {
       r.think = RIVAL.thinkInterval * Phaser.Math.FloatBetween(0.8, 1.2);
@@ -574,7 +596,7 @@ export default class Spawner {
     const dv = Math.hypot(dvx, dvy) || 1;
     const maxChange = RIVAL.acceleration * scale * dt;
     const k = Math.min(1, maxChange / dv);
-    if (!r.pulled) {
+    if (!r.pulled && !r.wanderer) {
       r.vx += dvx * k;
       r.vy += dvy * k;
     }
