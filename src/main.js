@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME, COLORS } from './config.js';
 import GameScene from './scenes/GameScene.js';
+import UIScene from './scenes/UIScene.js';
 
 // Phaser game setup: WebGL, portrait 720×1280 design size, scaled to fit and
 // letterboxed on wide screens.
@@ -18,7 +19,10 @@ const game = new Phaser.Game({
     antialias: true,
     powerPreference: 'high-performance',
   },
-  scene: [GameScene],
+  scene: [GameScene, UIScene],
 });
+
+// Handy for debugging in the browser console during development only.
+if (import.meta.env.DEV) window.game = game;
 
 export default game;

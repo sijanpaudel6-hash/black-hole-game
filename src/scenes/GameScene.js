@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
-import { GAME, COLORS, WORLD, CAMERA, STARFIELD } from '../config.js';
+import { GAME, COLORS, DEPTH, WORLD, CAMERA, STARFIELD } from '../config.js';
 import BlackHole from '../objects/BlackHole.js';
+import Spawner from '../systems/spawner.js';
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -12,6 +13,7 @@ export default class GameScene extends Phaser.Scene {
     this.drawWorldEdge();
 
     this.blackHole = new BlackHole(this, 0, 0);
+    this.registry.set('mass', this.blackHole.mass);
 
     const cam = this.cameras.main;
     cam.setBackgroundColor(COLORS.void);
@@ -23,12 +25,23 @@ export default class GameScene extends Phaser.Scene {
       this.cursors = this.input.keyboard.createCursorKeys();
       this.wasd = this.input.keyboard.addKeys('W,A,S,D');
     }
+
+    // Spawn after the camera is placed so objects know where the view is.
+    this.spawner = new Spawner(this, 1);
+
+    // HUD runs as its own scene on top, unaffected by this scene's camera.
+    this.scene.launch('UIScene');
   }
 
   update(_time, deltaMs) {
     const dt = Math.min(deltaMs / 1000, GAME.maxFrameDelta);
 
     this.blackHole.move(dt, this.getPointerTarget(), this.getKeyboardDirection());
+    const eaten = this.spawner.update(dt, this.time.now / 1000, this.blackHole);
+    if (eaten > 0) {
+      this.blackHole.addMass(eaten);
+      this.registry.set('mass', this.blackHole.mass);
+    }
     this.updateStarfield();
   }
 
@@ -61,7 +74,8 @@ export default class GameScene extends Phaser.Scene {
       const sprite = this.add
         .tileSprite(0, 0, GAME.width, GAME.height, key)
         .setOrigin(0, 0)
-        .setScrollFactor(0);
+        .setScrollFactor(0)
+        .setDepth(DEPTH.stars);
       return { sprite, scrollFactor: layer.scrollFactor };
     });
   }
@@ -104,6 +118,7 @@ export default class GameScene extends Phaser.Scene {
   drawWorldEdge() {
     this.add
       .graphics()
+      .setDepth(DEPTH.worldEdge)
       .lineStyle(WORLD.edgeLineWidth, COLORS.hairline, WORLD.edgeLineAlpha)
       .strokeCircle(0, 0, WORLD.radius);
   }
